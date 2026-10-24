@@ -191,18 +191,38 @@ body.th-body .th-display {
     padding-left: var(--sidebar-w-collapsed);
 }
 
-.th-collapsed .th-sidebar .th-nav-label,
-.th-collapsed .th-sidebar .th-nav-group-title,
-.th-collapsed .th-sidebar .th-brand-text,
-.th-collapsed .th-sidebar .th-nav-badge,
-.th-collapsed .th-sidebar .th-sidebar-foot {
-    opacity: 0;
-    pointer-events: none;
-    white-space: nowrap;
-}
+/* Only the desktop rail collapses. On a phone the sidebar is off-canvas and
+   must stay readable even when the rail was left collapsed on a desktop. */
+@media (min-width: 992px) {
+    .th-collapsed .th-sidebar .th-nav-label,
+    .th-collapsed .th-sidebar .th-brand-text,
+    .th-collapsed .th-sidebar .th-nav-badge,
+    .th-collapsed .th-sidebar .th-sidebar-foot {
+        display: none;
+    }
 
-.th-collapsed .th-sidebar .th-nav-link {
-    justify-content: center;
+    /* The group heading becomes the rule that separated it anyway. */
+    .th-collapsed .th-sidebar .th-nav-group-title {
+        height: 1px;
+        margin: 0.8rem 0.5rem 0.6rem;
+        padding: 0;
+        overflow: hidden;
+        background: var(--glass-border);
+        color: transparent;
+    }
+
+    .th-collapsed .th-sidebar .th-nav-link {
+        justify-content: center;
+        gap: 0;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .th-collapsed .th-brand {
+        justify-content: center;
+        gap: 0;
+        padding: 0 0.5rem;
+    }
 }
 
 /* --------------------------------------------------------------------------
@@ -664,8 +684,12 @@ body.th-body .th-display {
 }
 
 .th-stat-value sup {
-    /* Keep the unit on the number's baseline instead of raising it. */
+    /* Bootstrap's reboot gives every sup `top: -.5em`, which floated the unit
+       above the figure. Put it back on the same baseline. */
+    position: static;
+    top: 0;
     vertical-align: baseline;
+    line-height: inherit;
     font-size: 0.78rem;
     font-weight: 500;
     color: var(--text-muted);
@@ -2818,14 +2842,18 @@ body.th-body .th-display {
 }
 
 /* Collapsed rail: icon only. */
-.th-collapsed .th-area-switch-wrap .th-nav-label {
-    opacity: 0;
-    pointer-events: none;
-}
+@media (min-width: 992px) {
+    .th-collapsed .th-area-switch-wrap .th-nav-label {
+        display: none;
+    }
 
-.th-collapsed .th-body a.th-area-switch,
-.th-collapsed a.th-area-switch {
-    justify-content: center;
+    .th-collapsed .th-body a.th-area-switch,
+    .th-collapsed a.th-area-switch {
+        justify-content: center;
+        gap: 0;
+        padding-left: 0;
+        padding-right: 0;
+    }
 }
 
 /* ==========================================================================
@@ -3154,7 +3182,9 @@ body.th-body .th-display {
     display: grid;
     grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
     align-items: start;
-    gap: 1.1rem;
+    /* The two halves are separate steps, so they get more air between them
+       than two cards in the same section would. */
+    gap: 2.25rem;
 }
 
 .th-create-config {
@@ -3280,6 +3310,7 @@ body.th-body .th-display {
 @media (max-width: 1199.98px) {
     .th-create {
         grid-template-columns: minmax(0, 1fr);
+        gap: 1.75rem;
     }
 
     .th-create-config {
@@ -3289,4 +3320,301 @@ body.th-body .th-display {
     .th-create-hint {
         min-height: 200px;
     }
+}
+
+/* Two price lists side by side: label, credits, money. */
+.th-pricegrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.th-pricegrid-head {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+@media (max-width: 575.98px) {
+    .th-pricegrid {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    /* The spacer above the label column has nothing to line up with here. */
+    .th-pricegrid > span:first-child {
+        display: none;
+    }
+
+    .th-pricegrid > label {
+        grid-column: 1 / -1;
+        margin: 0.4rem 0 0;
+    }
+}
+
+/* ==========================================================================
+   Popovers and tooltips
+   Bootstrap ships these in white with near-black text, which was unreadable
+   against the dark panel.
+   ========================================================================== */
+
+.th-body .popover {
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-lg);
+    font-family: inherit;
+    max-width: 320px;
+}
+
+.th-body .popover-header {
+    background: transparent;
+    border-bottom: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.th-body .popover-body {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+/* The arrow is drawn from two borders, so both have to follow the surface. */
+.th-body .bs-popover-top > .arrow::after,
+.th-body .bs-popover-auto[x-placement^="top"] > .arrow::after {
+    border-top-color: var(--glass-strong);
+}
+
+.th-body .bs-popover-bottom > .arrow::after,
+.th-body .bs-popover-auto[x-placement^="bottom"] > .arrow::after {
+    border-bottom-color: var(--glass-strong);
+}
+
+.th-body .bs-popover-left > .arrow::after,
+.th-body .bs-popover-auto[x-placement^="left"] > .arrow::after {
+    border-left-color: var(--glass-strong);
+}
+
+.th-body .bs-popover-right > .arrow::after,
+.th-body .bs-popover-auto[x-placement^="right"] > .arrow::after {
+    border-right-color: var(--glass-strong);
+}
+
+.th-body .bs-popover-top > .arrow::before { border-top-color: var(--glass-border); }
+.th-body .bs-popover-bottom > .arrow::before { border-bottom-color: var(--glass-border); }
+.th-body .bs-popover-left > .arrow::before { border-left-color: var(--glass-border); }
+.th-body .bs-popover-right > .arrow::before { border-right-color: var(--glass-border); }
+
+.th-body .bs-popover-bottom .popover-header::before {
+    border-bottom-color: var(--glass-border);
+}
+
+.th-body .tooltip-inner {
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    max-width: 280px;
+}
+
+.th-body .bs-tooltip-top .arrow::before { border-top-color: var(--glass-strong); }
+.th-body .bs-tooltip-bottom .arrow::before { border-bottom-color: var(--glass-strong); }
+.th-body .bs-tooltip-left .arrow::before { border-left-color: var(--glass-strong); }
+.th-body .bs-tooltip-right .arrow::before { border-right-color: var(--glass-strong); }
+
+/* The little question marks that open them. */
+.th-body .th-hint,
+.th-body label > .fa-info-circle {
+    margin-left: 0.3rem;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    cursor: help;
+    transition: color 0.15s ease;
+}
+
+.th-body .th-hint:hover,
+.th-body label > .fa-info-circle:hover {
+    color: var(--brand-light);
+}
+
+/* ==========================================================================
+   Notifications
+   SweetAlert carries its own white theme; this puts it on the panel's
+   surface so an error or a saved-settings toast looks like the rest.
+   ========================================================================== */
+
+.th-body .swal2-container {
+    backdrop-filter: blur(2px);
+}
+
+.th-body .swal2-container.swal2-backdrop-show {
+    background: rgba(4, 6, 11, 0.62);
+}
+
+.th-body .swal2-popup {
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-lg);
+    color: var(--text-primary);
+    font-family: inherit;
+    padding: 1.6rem 1.5rem 1.35rem;
+}
+
+.th-body .swal2-title {
+    font-family: "Montserrat", sans-serif;
+    font-size: 1.12rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    padding: 0;
+}
+
+.th-body .swal2-html-container,
+.th-body .swal2-content {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    line-height: 1.55;
+    margin-top: 0.7rem;
+}
+
+.th-body .swal2-actions {
+    gap: 0.5rem;
+    margin-top: 1.3rem;
+}
+
+.th-body .swal2-styled {
+    margin: 0;
+    padding: 0.58rem 1.2rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-btn);
+    font-size: 0.88rem;
+    font-weight: 600;
+    box-shadow: none;
+}
+
+.th-body .swal2-styled:focus {
+    box-shadow: none;
+    outline: 2px solid var(--brand-light);
+    outline-offset: 2px;
+}
+
+.th-body .swal2-styled.swal2-confirm {
+    background: var(--brand);
+    color: #fff;
+}
+
+.th-body .swal2-styled.swal2-confirm:hover {
+    background: var(--brand-hover);
+}
+
+.th-body .swal2-styled.swal2-cancel,
+.th-body .swal2-styled.swal2-deny {
+    background: var(--surface);
+    border-color: var(--glass-border);
+    color: var(--text-secondary);
+}
+
+.th-body .swal2-styled.swal2-cancel:hover,
+.th-body .swal2-styled.swal2-deny:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+/* The icon ring is drawn in its own colour; only the muted ones need help. */
+.th-body .swal2-icon.swal2-info,
+.th-body .swal2-icon.swal2-question {
+    border-color: rgba(59, 127, 250, 0.5);
+    color: var(--brand-light);
+}
+
+.th-body .swal2-icon {
+    margin: 0.2rem auto 0.9rem;
+    width: 3.4rem;
+    height: 3.4rem;
+}
+
+.th-body .swal2-icon .swal2-icon-content {
+    font-size: 2.1rem;
+}
+
+.th-body .swal2-input,
+.th-body .swal2-select,
+.th-body .swal2-textarea {
+    background: var(--surface);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-btn);
+    color: var(--text-primary);
+    box-shadow: none;
+}
+
+.th-body .swal2-input:focus,
+.th-body .swal2-select:focus,
+.th-body .swal2-textarea:focus {
+    border-color: var(--brand-light);
+    box-shadow: none;
+}
+
+.th-body .swal2-validation-message {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+    border-radius: var(--radius-sm);
+}
+
+.th-body .swal2-close {
+    color: var(--text-muted);
+    box-shadow: none;
+}
+
+.th-body .swal2-close:hover {
+    color: var(--text-primary);
+}
+
+/* Toasts sit in the corner and carry their own, tighter spacing. */
+.th-body .swal2-popup.swal2-toast {
+    padding: 0.7rem 0.9rem;
+    box-shadow: var(--shadow-lg);
+}
+
+.th-body .swal2-popup.swal2-toast .swal2-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.th-body .swal2-popup.swal2-toast .swal2-icon {
+    width: 1.6rem;
+    height: 1.6rem;
+    margin: 0 0.55rem 0 0;
+}
+
+.th-body .swal2-timer-progress-bar {
+    background: var(--brand);
+}
+
+/* The gateway in the order summary is shown by its wordmark. */
+.th-pay-with {
+    display: inline-flex;
+    align-items: center;
+}
+
+.th-pay-with-logo {
+    height: 20px;
+    max-width: 92px;
+    object-fit: contain;
+}
+
+/* A gateway logo is its wordmark, so the name under it would only repeat it.
+   It comes back when the logo cannot be loaded. */
+.th-gateway .th-gateway-name {
+    display: none;
+}
+
+.th-gateway.is-logoless .th-gateway-name {
+    display: block;
 }

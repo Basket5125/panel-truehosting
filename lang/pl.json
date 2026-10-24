@@ -821,5 +821,13 @@
     "Loading": "Wczytywanie",
     "No limit": "Bez limitu",
     "Additional allocations (ports)": "Dodatkowe porty",
-    "Unlimited": "Bez limitu"
+    "Unlimited": "Bez limitu",
+    "Signing in": "Logowanie",
+    "Creating account": "Tworzenie konta",
+    "A resource priced at 0 in both columns is hidden from the configurator. The customer is charged from the column matching the payment they picked.": "Zasób z ceną 0 w obu kolumnach nie pojawi się w konfiguratorze. Klient płaci z tej kolumny, która odpowiada wybranej formie płatności.",
+    "Only used by plans with no money price list: the money total is then the credit total times this rate. Leave it at 0 once you have filled the currency column above.": "Używane tylko przez pakiety bez cennika w walucie — kwota to wtedy cena w kredytach razy ten przelicznik. Po wypełnieniu kolumny z walutą zostaw 0.",
+    "Direct payments are charged from the currency column of the price list. After the paid period ends, the server keeps running for the grace days, then it is suspended.": "Płatność bezpośrednia liczona jest z kolumny walutowej cennika. Po końcu opłaconego okresu serwer działa jeszcze przez dni karencji, potem jest zawieszany.",
+    "Basics": "Podstawy",
+    "Defines the priority for server billing. If not provided, the value of selected product will be used.": "Określa priorytet rozliczania serwera. Jeśli nie wybierzesz, użyta zostanie wartość z pakietu.",
+    "Pay with": "Płatność przez"
 }

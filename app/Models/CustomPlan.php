@@ -30,12 +30,12 @@ class CustomPlan extends Model
 
     /** The resources a customer can choose, and what one unit means. */
     public const RESOURCES = [
-        'cpu' => ['price' => 'price_cpu', 'per' => 100],       // 100% = 1 vCore
-        'memory' => ['price' => 'price_memory', 'per' => 1024], // MB per GB
-        'disk' => ['price' => 'price_disk', 'per' => 1024],
-        'backups' => ['price' => 'price_backup', 'per' => 1],
-        'databases' => ['price' => 'price_database', 'per' => 1],
-        'allocations' => ['price' => 'price_allocation', 'per' => 1],
+        'cpu' => ['price' => 'price_cpu', 'money' => 'money_price_cpu', 'per' => 100],       // 100% = 1 vCore
+        'memory' => ['price' => 'price_memory', 'money' => 'money_price_memory', 'per' => 1024], // MB per GB
+        'disk' => ['price' => 'price_disk', 'money' => 'money_price_disk', 'per' => 1024],
+        'backups' => ['price' => 'price_backup', 'money' => 'money_price_backup', 'per' => 1],
+        'databases' => ['price' => 'price_database', 'money' => 'money_price_database', 'per' => 1],
+        'allocations' => ['price' => 'price_allocation', 'money' => 'money_price_allocation', 'per' => 1],
     ];
 
     public static function boot()
@@ -118,6 +118,15 @@ class CustomPlan extends Model
         return max(0.0, min(100.0, $percent)) / 100;
     }
 
+    /** Whether this resource is part of the plan at all. */
+    public function offers(string $resource): bool
+    {
+        $meta = self::RESOURCES[$resource] ?? null;
+
+        return $meta !== null
+            && ((int) $this->{$meta['price']} > 0 || (int) $this->{$meta['money']} > 0);
+    }
+
     /**
      * Per-resource price breakdown, used both for the total and for showing
      * the customer where the money goes.
@@ -125,16 +134,22 @@ class CustomPlan extends Model
      * @param  array<string, int>  $resources  already clamped
      * @return array<string, array{units: float, unit_price: int, discount: float, total: int}>
      */
-    public function breakdown(array $resources): array
+    public function breakdown(array $resources, bool $inMoney = false): array
     {
         $lines = [];
 
         foreach (self::RESOURCES as $resource => $meta) {
-            $unitPrice = (int) $this->{$meta['price']};
-
-            if ($unitPrice <= 0) {
+            // Which resources are configurable is decided once, by either
+            // price list. Otherwise a direct-only plan priced in money alone
+            // would offer nothing, and a resource priced in credits but not in
+            // money would silently drop out of the money total.
+            if (!$this->offers($resource)) {
                 continue;
             }
+
+            $unitPrice = $inMoney
+                ? $this->moneyUnitPrice($resource)
+                : (int) $this->{$meta['price']};
 
             $units = ((int) ($resources[$resource] ?? 0)) / $meta['per'];
 
@@ -177,19 +192,51 @@ class CustomPlan extends Model
     public function allowsDirect(): bool
     {
         return in_array($this->payment_modes, ['direct', 'both'], true)
-            && $this->credit_rate > 0;
+            && ($this->hasMoneyPrices() || $this->credit_rate > 0);
+    }
+
+    /** Whether the admin entered a money price list of its own. */
+    public function hasMoneyPrices(): bool
+    {
+        foreach (self::RESOURCES as $meta) {
+            if ((int) $this->{$meta['money']} > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
-     * The same configuration expressed in money, derived from the credit
-     * price by the plan's rate. Both figures use the 1000x integer scale, so
-     * the rate multiplies cleanly.
+     * What one unit of a resource costs in money.
+     *
+     * A plan from before the money price list has none, so its figure is
+     * still derived from the credit price by `credit_rate`.
+     */
+    public function moneyUnitPrice(string $resource): int
+    {
+        $meta = self::RESOURCES[$resource] ?? null;
+
+        if ($meta === null) {
+            return 0;
+        }
+
+        if ($this->hasMoneyPrices()) {
+            return (int) $this->{$meta['money']};
+        }
+
+        return (int) round(((int) $this->{$meta['price']}) * (float) $this->credit_rate);
+    }
+
+    /**
+     * The same configuration expressed in money. Both figures use the 1000x
+     * integer scale.
      *
      * @param  array<string, int>  $resources  already clamped
      */
     public function moneyPriceFor(array $resources): int
     {
-        return (int) round($this->priceFor($resources) * (float) $this->credit_rate);
+        return array_sum(array_column($this->breakdown($resources, true), 'total'));
     }
 
     /* ---------------------------------------------------------------------

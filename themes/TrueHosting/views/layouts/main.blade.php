@@ -48,7 +48,12 @@
     @vite('themes/default/sass/app.scss')
 
     {{-- TrueHosting skin. Must load last so it can override the base. --}}
-    <link rel="stylesheet" href="{{ asset('themes/TrueHosting/theme.css') }}">
+    {{-- The version keeps a browser from serving a stale skin after a deploy. --}}
+    @php
+        $themeFile = public_path('themes/TrueHosting/theme.css');
+        $themeVersion = is_file($themeFile) ? filemtime($themeFile) : 1;
+    @endphp
+    <link rel="stylesheet" href="{{ asset('themes/TrueHosting/theme.css') }}?v={{ $themeVersion }}">
 
     <style>
         #userDropdown.dropdown-toggle::after,
@@ -593,8 +598,6 @@
         title: title,
         position: 'top-end',
         showConfirmButton: false,
-        background: '#212129',
-        color: '#eef1f7',
         toast: true,
         timer: 3200,
         timerProgressBar: true,
@@ -610,8 +613,6 @@
             icon: 'error',
             title: 'Oops...',
             html: '{{ Session::get('error') }}',
-            background: '#212129',
-            color: '#eef1f7',
         })
     @endif
     @if (Session::has('success'))

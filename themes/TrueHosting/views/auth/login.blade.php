@@ -105,7 +105,8 @@
                     <div class="alert alert-danger">{{ session('message') }}</div>
                 @endif
 
-                <form action="{{ route('login') }}" method="post">
+                <form action="{{ route('login') }}" method="post"
+                      data-busy="{{ __('Signing in') }}">
                     @csrf
 
                     <div class="th-field">

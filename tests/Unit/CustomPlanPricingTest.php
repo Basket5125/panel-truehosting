@@ -142,6 +142,53 @@ class CustomPlanPricingTest extends TestCase
         $this->assertGreaterThan(0, $price);
     }
 
+    public function test_the_money_price_comes_from_its_own_list_when_there_is_one(): void
+    {
+        // 1.00 per vCore, 0.75 per GB RAM, nothing per GB disk or backup.
+        $plan = $this->plan([
+            'payment_modes' => 'both',
+            'currency_code' => 'PLN',
+            // A rate is still set, to prove the list wins over it.
+            'credit_rate' => 0.05,
+            'money_price_cpu' => 1000,
+            'money_price_memory' => 750,
+        ]);
+
+        $resources = [
+            'cpu' => 200, 'memory' => 4096, 'disk' => 20480,
+            'backups' => 2, 'databases' => 0, 'allocations' => 1,
+        ];
+
+        // Credits are unchanged: 2*2000 + 4*1500 + 20*100 + 2*500.
+        $this->assertSame(13000, $plan->priceFor($resources));
+
+        // Money: 2*1000 + 4*750, and nothing for the unpriced lines.
+        $this->assertSame(5000, $plan->moneyPriceFor($resources));
+    }
+
+    public function test_a_resource_priced_only_in_money_is_still_offered(): void
+    {
+        $plan = $this->plan([
+            'price_database' => 0,
+            'money_price_database' => 500,
+        ]);
+
+        $this->assertTrue($plan->offers('databases'));
+        $this->assertSame(0, $plan->priceFor(['databases' => 3]));
+        $this->assertSame(1500, $plan->moneyPriceFor(['databases' => 3]));
+    }
+
+    public function test_a_money_price_list_is_enough_for_direct_payment(): void
+    {
+        $plan = $this->plan([
+            'payment_modes' => 'both',
+            'credit_rate' => 0,
+            'money_price_cpu' => 1000,
+        ]);
+
+        $this->assertTrue($plan->allowsDirect());
+    }
+
     public function test_the_money_price_follows_the_credit_rate(): void
     {
         $plan = $this->plan(['credit_rate' => 0.05, 'payment_modes' => 'both', 'currency_code' => 'EUR']);
@@ -182,6 +229,30 @@ class CustomPlanPricingTest extends TestCase
             '2027-06-10',
             \App\Services\ServerRenewalService::addPeriod($paidUntil, 'annually')->toDateString()
         );
+    }
+
+    /**
+     * Product and ShopProduct both multiply an incoming price by 1000, while a
+     * plan's figures are already on that scale. Handing one straight over made
+     * every configured server cost 1000x too much, so no customer ever had
+     * enough credits and a direct payment charged 1000x the real amount.
+     */
+    public function test_a_plan_price_survives_the_handover_to_a_product(): void
+    {
+        $credits = $this->plan()->priceFor([
+            'cpu' => 200, 'memory' => 4096, 'disk' => 20480,
+            'backups' => 2, 'databases' => 0, 'allocations' => 1,
+        ]);
+
+        $product = new \App\Models\Product();
+        $product->price = \App\Facades\Currency::convertForDisplay($credits);
+
+        $this->assertSame($credits, (int) $product->price);
+
+        $shopProduct = new \App\Models\ShopProduct();
+        $shopProduct->price = \App\Facades\Currency::convertForDisplay($credits);
+
+        $this->assertSame($credits, (int) $shopProduct->price);
     }
 
     public function test_large_orders_are_recognised(): void

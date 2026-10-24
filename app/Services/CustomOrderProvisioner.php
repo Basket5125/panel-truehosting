@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Facades\Currency;
 use App\Models\CustomOrder;
 use App\Models\CustomPlan;
 use App\Models\Product;
@@ -127,7 +128,11 @@ class CustomOrderProvisioner
             'name' => $plan->name . ' · ' . round($resources['cpu'] / 100, 1) . ' vCPU / '
                 . round($resources['memory'] / 1024, 1) . ' GB RAM',
             'description' => __('Configured plan'),
-            'price' => $price,
+            // Product::price multiplies by 1000 on the way in, and $price is
+            // already on that scale, so it has to be handed over as a plain
+            // figure. Without this every configured server costs 1000x too
+            // much and no customer ever has enough credits for one.
+            'price' => Currency::convertForDisplay($price),
             'memory' => $resources['memory'],
             'cpu' => $resources['cpu'],
             'swap' => $plan->swap,
@@ -139,7 +144,11 @@ class CustomOrderProvisioner
             'serverlimit' => 0,
             'oom_killer' => $plan->oom_killer,
             'billing_period' => $plan->billing_period,
-            'minimum_credits' => $plan->minimum_credits,
+            // Same scale again; -1 means "use the price", which Product
+            // expresses as null.
+            'minimum_credits' => (int) $plan->minimum_credits > 0
+                ? Currency::convertForDisplay($plan->minimum_credits)
+                : null,
             'disabled' => true,
         ]);
 

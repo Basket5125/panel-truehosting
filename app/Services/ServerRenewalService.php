@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Facades\Currency;
 use App\Models\CustomOrder;
 use App\Models\Server;
 use App\Models\ShopProduct;
@@ -78,6 +79,26 @@ class ServerRenewalService
     }
 
     /**
+     * The configuration a server was sold with, in the shape CustomPlan
+     * prices against.
+     *
+     * @return array<string, int>
+     */
+    private function resourcesOf(Server $server): array
+    {
+        $product = $server->product;
+
+        return [
+            'cpu' => (int) $product->cpu,
+            'memory' => (int) $product->memory,
+            'disk' => (int) $product->disk,
+            'backups' => (int) $product->backups,
+            'databases' => (int) $product->databases,
+            'allocations' => (int) $product->allocations,
+        ];
+    }
+
+    /**
      * Build the throwaway shop product the checkout needs, plus the order row
      * that lets the completed payment be traced back here.
      */
@@ -90,7 +111,13 @@ class ServerRenewalService
         }
 
         $credits = (int) round($server->product->price);
-        $money = (int) round($credits * (float) $plan->credit_rate);
+
+        // The money figure comes from the plan's own currency list, priced on
+        // the resources this server actually holds. A plan from before that
+        // list still derives it from the credit rate.
+        $money = $plan->hasMoneyPrices()
+            ? $plan->moneyPriceFor($this->resourcesOf($server))
+            : (int) round($credits * (float) $plan->credit_rate);
 
         if ($money <= 0) {
             throw new Exception(__('This server cannot be paid for directly.'));
@@ -98,7 +125,9 @@ class ServerRenewalService
 
         $shopProduct = ShopProduct::create([
             'type' => 'Server renewal',
-            'price' => $money,
+            // ShopProduct::price multiplies by 1000 on the way in and $money
+            // is already on that scale, so it is handed over as a plain figure.
+            'price' => Currency::convertForDisplay($money),
             'display' => $server->name,
             'description' => __('Renewal of :server for one :period', [
                 'server' => $server->name,

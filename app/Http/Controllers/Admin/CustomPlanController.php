@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomPlan;
 use App\Models\Pterodactyl\Egg;
 use App\Models\Pterodactyl\Node;
+use App\Settings\GeneralSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -30,6 +31,7 @@ class CustomPlanController extends Controller
         $this->checkPermission(self::WRITE_PERMISSION);
 
         return view('admin.customplans.form', [
+            'credits_display_name' => app(GeneralSettings::class)->credits_display_name,
             'plan' => new CustomPlan(),
             'nodes' => Node::orderBy('name')->get(),
             'eggs' => Egg::with('nest')->orderBy('name')->get(),
@@ -43,6 +45,7 @@ class CustomPlanController extends Controller
         $this->checkPermission(self::WRITE_PERMISSION);
 
         return view('admin.customplans.form', [
+            'credits_display_name' => app(GeneralSettings::class)->credits_display_name,
             'plan' => $customplan,
             'nodes' => Node::orderBy('name')->get(),
             'eggs' => Egg::with('nest')->orderBy('name')->get(),
@@ -101,6 +104,13 @@ class CustomPlanController extends Controller
             'price_database' => 'required|numeric|min:0',
             'price_allocation' => 'required|numeric|min:0',
 
+            'money_price_cpu' => 'required|numeric|min:0',
+            'money_price_memory' => 'required|numeric|min:0',
+            'money_price_disk' => 'required|numeric|min:0',
+            'money_price_backup' => 'required|numeric|min:0',
+            'money_price_database' => 'required|numeric|min:0',
+            'money_price_allocation' => 'required|numeric|min:0',
+
             'cpu_min' => 'required|integer|min:1',
             'cpu_max' => 'required|integer|gte:cpu_min',
             'cpu_step' => 'required|integer|min:1',
@@ -122,7 +132,7 @@ class CustomPlanController extends Controller
             'large_order_memory' => 'nullable|integer|min:1',
 
             'payment_modes' => 'required|in:credits,direct,both',
-            'credit_rate' => 'required|numeric|min:0',
+            'credit_rate' => 'nullable|numeric|min:0',
             'currency_code' => 'required|string|size:3',
             'grace_days' => 'required|integer|min:0|max:60',
 
@@ -137,15 +147,19 @@ class CustomPlanController extends Controller
             'eggs.*' => 'integer',
         ]);
 
-        // Prices are entered in credits and stored in the 1000x integer scale.
-        foreach (['price_cpu', 'price_memory', 'price_disk', 'price_backup', 'price_database', 'price_allocation'] as $field) {
-            $data[$field] = Currency::prepareForDatabase((float) $data[$field]);
+        // Both price lists are entered per unit and stored in the 1000x
+        // integer scale: one in credits, one in the plan's currency.
+        foreach (array_keys(CustomPlan::RESOURCES) as $resource) {
+            foreach ([CustomPlan::RESOURCES[$resource]['price'], CustomPlan::RESOURCES[$resource]['money']] as $field) {
+                $data[$field] = Currency::prepareForDatabase((float) $data[$field]);
+            }
         }
 
         $data['minimum_credits'] = $data['minimum_credits'] == -1
             ? -1
             : Currency::prepareForDatabase((float) $data['minimum_credits']);
 
+        $data['credit_rate'] = (float) ($data['credit_rate'] ?? 0);
         $data['currency_code'] = strtoupper($data['currency_code']);
         $data['disabled'] = $request->boolean('disabled');
         $data['oom_killer'] = $request->boolean('oom_killer');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\BillingPriority;
+use App\Facades\Currency;
 use App\Models\CustomOrder;
 use App\Models\CustomPlan;
 use App\Models\ShopProduct;
@@ -77,6 +78,9 @@ class CustomPlanOrderController extends Controller
             'resources' => $resources,
             'breakdown' => $customplan->breakdown($resources),
             'price' => $customplan->priceFor($resources),
+            'money_breakdown' => $customplan->breakdown($resources, true),
+            'money_price' => $customplan->moneyPriceFor($resources),
+            'currency_code' => $customplan->currency_code,
             'large_order' => $customplan->isLargeOrder($resources),
         ]);
     }
@@ -175,7 +179,9 @@ class CustomPlanOrderController extends Controller
 
         $shopProduct = ShopProduct::create([
             'type' => 'Server',
-            'price' => $money,
+            // ShopProduct::price multiplies by 1000 on the way in and $money
+            // is already on that scale, so it is handed over as a plain figure.
+            'price' => Currency::convertForDisplay($money),
             'display' => $plan->name . ' · ' . $name,
             'description' => __('First :period of :name', [
                 'period' => $plan->billing_period,

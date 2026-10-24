@@ -2,7 +2,9 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
-    @php($website_settings = app(App\Settings\WebsiteSettings::class))
+    @php
+        $website_settings = app(App\Settings\WebsiteSettings::class);
+    @endphp
 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -27,7 +29,9 @@
         <link rel="stylesheet" href="{{ asset('plugins/fontawesome-free/css/all.min.css') }}">
     </noscript>
 
-    @php ($recaptchaVersion = app(App\Settings\GeneralSettings::class)->recaptcha_version)
+    @php
+        $recaptchaVersion = app(App\Settings\GeneralSettings::class)->recaptcha_version;
+    @endphp
     @if ($recaptchaVersion)
         @switch($recaptchaVersion)
             @case("v2")
@@ -40,12 +44,45 @@
     @endif
 
     @vite('themes/default/sass/app.scss')
-    <link rel="stylesheet" href="{{ asset('themes/TrueHosting/theme.css') }}">
+    {{-- The version keeps a browser from serving a stale skin after a deploy. --}}
+    @php
+        $themeFile = public_path('themes/TrueHosting/theme.css');
+        $themeVersion = is_file($themeFile) ? filemtime($themeFile) : 1;
+    @endphp
+    <link rel="stylesheet" href="{{ asset('themes/TrueHosting/theme.css') }}?v={{ $themeVersion }}">
 </head>
 
 <body class="th-body dark-mode">
 
 @yield('content')
+
+<script>
+    // Signing in waits on the network, and a dead-looking button invites a
+    // second click. Mark the submit as busy until the page actually leaves.
+    document.addEventListener('submit', function (e) {
+        const form = e.target.closest('form[data-busy]');
+        if (!form || e.defaultPrevented) return;
+
+        const button = form.querySelector('[type="submit"]');
+        if (!button || button.dataset.busy === '1') return;
+
+        button.dataset.idleHtml = button.innerHTML;
+        button.dataset.busy = '1';
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'
+            + '<span>' + (form.dataset.busy || '') + '</span>';
+    });
+
+    // A bfcache restore hands back the page with the button still spinning.
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) return;
+        document.querySelectorAll('form[data-busy] [type="submit"][data-busy="1"]').forEach(function (button) {
+            button.disabled = false;
+            delete button.dataset.busy;
+            if (button.dataset.idleHtml) button.innerHTML = button.dataset.idleHtml;
+        });
+    });
+</script>
 
 <script src="{{ asset('plugins/sweetalert2/sweetalert2.all.min.js') }}"></script>
 <script>
@@ -54,8 +91,6 @@
             icon: 'error',
             title: 'Oops...',
             html: '{{ Session::get('error') }}',
-            background: '#212129',
-            color: '#eef1f7',
         })
     @endif
     @if (Session::has('success'))
@@ -64,8 +99,6 @@
             title: '{{ Session::get('success') }}',
             position: 'top-end',
             showConfirmButton: false,
-            background: '#212129',
-            color: '#eef1f7',
             toast: true,
             timer: 3200,
             timerProgressBar: true,

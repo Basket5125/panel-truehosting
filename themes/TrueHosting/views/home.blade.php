@@ -434,8 +434,6 @@
                 title: '{{ __('URL copied to clipboard') }}',
                 position: 'top-end',
                 showConfirmButton: false,
-                background: '#212129',
-                color: '#eef1f7',
                 toast: true,
                 timer: 1600,
                 timerProgressBar: true,

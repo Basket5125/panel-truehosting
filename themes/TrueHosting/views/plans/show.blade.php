@@ -4,10 +4,11 @@
 
 @section('content')
     @php
-        // Only resources the admin actually priced are configurable.
+        // Only resources the admin actually priced are configurable — in
+        // either currency, so a plan sold for money alone still offers them.
         $fields = [];
         foreach (\App\Models\CustomPlan::RESOURCES as $key => $meta) {
-            if ((int) $plan->{$meta['price']} <= 0) { continue; }
+            if (!$plan->offers($key)) { continue; }
             $fields[$key] = [
                 'label' => match ($key) {
                     'cpu' => __('CPU'), 'memory' => __('RAM'), 'disk' => __('Disk'),
@@ -19,6 +20,7 @@
                 'step' => (int) ($plan->{$key . '_step'} ?? 1),
                 'per' => $meta['per'],
                 'unit_price' => (int) $plan->{$meta['price']},
+                'money_unit_price' => $plan->moneyUnitPrice($key),
                 'suffix' => match ($key) {
                     'cpu' => '%', 'memory', 'disk' => 'MB', default => '',
                 },
@@ -32,7 +34,7 @@
     </div>
 
     <form method="POST" action="{{ route('plans.order', $plan->id) }}"
-          x-data="planBuilder()" x-init="recalc()">
+          x-data="planBuilder()" x-init="recalc(); $watch('mode', () => recalc())">
         @csrf
 
         <div class="row">
@@ -107,17 +109,17 @@
                                                   x-text="'-' + Math.round(line.discount * 100) + '%'"></span>
                                         </template>
                                     </span>
-                                    <span x-text="money(line.total)"></span>
+                                    <span x-text="amount(line.total)"></span>
                                 </div>
                             </template>
 
                             <div class="th-summary-total">
                                 <span>{{ __('Total') }}</span>
-                                <strong><span x-text="money(total)"></span></strong>
+                                <strong><span x-text="amount(total)"></span></strong>
                             </div>
 
                             <p class="text-muted" style="font-size:.78rem">
-                                {{ $credits_display_name }} / {{ $plan->billing_period }}
+                                <span x-text="unitLabel()"></span> / {{ $plan->billing_period }}
                             </p>
                         </div>
 
@@ -132,17 +134,18 @@
                                 <label class="th-label">{{ __('How do you want to pay?') }}</label>
                                 <div class="custom-control custom-radio mb-1">
                                     <input type="radio" class="custom-control-input" id="pm-credits"
-                                           name="payment_mode" value="credits" checked>
+                                           name="payment_mode" value="credits" x-model="mode">
                                     <label class="custom-control-label" for="pm-credits">
                                         {{ __('From credits') }}
+                                        <span class="text-muted" x-text="'(' + inCredits() + ')'"></span>
                                     </label>
                                 </div>
                                 <div class="custom-control custom-radio">
                                     <input type="radio" class="custom-control-input" id="pm-direct"
-                                           name="payment_mode" value="direct">
+                                           name="payment_mode" value="direct" x-model="mode">
                                     <label class="custom-control-label" for="pm-direct">
                                         {{ __('Pay now') }}
-                                        <span class="text-muted" x-text="'(' + moneyIn() + ')'"></span>
+                                        <span class="text-muted" x-text="'(' + inMoney() + ')'"></span>
                                     </label>
                                 </div>
                             </div>
@@ -150,7 +153,7 @@
                             <input type="hidden" name="payment_mode" value="direct">
                             <p class="text-muted mt-3 mb-0" style="font-size:.8rem">
                                 {{ __('Paid with money each') }} {{ $plan->billing_period }}:
-                                <strong><span x-text="moneyIn()"></span></strong>
+                                <strong><span x-text="inMoney()"></span></strong>
                             </p>
                         @else
                             <input type="hidden" name="payment_mode" value="credits">
@@ -178,15 +181,22 @@
             const discountPerUnit = {{ (float) $plan->discount_per_unit }};
             const discountMax = {{ (float) $plan->discount_max }};
             const largeThreshold = {{ $plan->large_order_memory !== null ? (int) $plan->large_order_memory : 'null' }};
-            const creditRate = {{ (float) $plan->credit_rate }};
+            const locale = '{{ str_replace('_', '-', app()->getLocale()) }}';
+            const currency = '{{ $plan->currency_code }}';
+            const creditsName = @json($credits_display_name);
 
             const start = {};
             Object.keys(fields).forEach(k => start[k] = fields[k].min);
 
             return {
                 res: start,
+                // Which price list the summary is showing. The server decides
+                // again on order; this only drives what the customer reads.
+                mode: '{{ $plan->allowsCredits() ? 'credits' : 'direct' }}',
                 lines: [],
                 total: 0,
+                moneyTotal: 0,
+                creditTotal: 0,
                 largeOrder: false,
 
                 display(key) {
@@ -202,21 +212,37 @@
                     return Math.min(Math.max(0, units - 1) * discountPerUnit, discountMax) / 100;
                 },
 
-                moneyIn() {
-                    // Mirrors CustomPlan::moneyPriceFor(); the server recomputes it.
-                    const value = (this.total * creditRate) / 1000;
-                    return value.toLocaleString('{{ str_replace('_', '-', app()->getLocale()) }}', {
-                        style: 'currency', currency: '{{ $plan->currency_code }}',
-                    });
+                /** Credit figures are plain numbers, money carries its symbol. */
+                amount(value) {
+                    return this.mode === 'direct' ? this.asMoney(value) : this.asCredits(value);
                 },
 
-                money(amount) {
-                    return (amount / 1000).toLocaleString('{{ str_replace('_', '-', app()->getLocale()) }}', {
+                asCredits(value) {
+                    return (value / 1000).toLocaleString(locale, {
                         minimumFractionDigits: 2, maximumFractionDigits: 2,
                     });
                 },
 
-                recalc() {
+                asMoney(value) {
+                    return (value / 1000).toLocaleString(locale, {
+                        style: 'currency', currency: currency,
+                    });
+                },
+
+                inCredits() {
+                    return this.asCredits(this.creditTotal) + ' ' + creditsName;
+                },
+
+                inMoney() {
+                    return this.asMoney(this.moneyTotal);
+                },
+
+                unitLabel() {
+                    return this.mode === 'direct' ? currency : creditsName;
+                },
+
+                /** Mirrors CustomPlan::breakdown() for one of the two price lists. */
+                priceList(priceKey) {
                     const lines = [];
                     let total = 0;
 
@@ -226,7 +252,7 @@
                         if (units <= 0) return;
 
                         const discount = this.discountFor(units);
-                        const lineTotal = Math.round(units * f.unit_price * (1 - discount));
+                        const lineTotal = Math.round(units * f[priceKey] * (1 - discount));
 
                         lines.push({
                             key: key,
@@ -238,8 +264,20 @@
                         total += lineTotal;
                     });
 
-                    this.lines = lines;
-                    this.total = total;
+                    return { lines: lines, total: total };
+                },
+
+                recalc() {
+                    const credits = this.priceList('unit_price');
+                    const money = this.priceList('money_unit_price');
+
+                    this.creditTotal = credits.total;
+                    this.moneyTotal = money.total;
+
+                    const active = this.mode === 'direct' ? money : credits;
+                    this.lines = active.lines;
+                    this.total = active.total;
+
                     this.largeOrder = largeThreshold !== null && (this.res.memory ?? 0) > largeThreshold;
                 },
             };

@@ -52,9 +52,11 @@
                                             :class="payment_method === '{{ $gateway->name }}' ? 'is-selected' : ''"
                                             :disabled="isFreeAfterCoupon"
                                             @click="payment_method = '{{ $gateway->name }}'; submitted = true;">
+                                        {{-- The logos are wordmarks. The name is kept as the
+                                             fallback for a gateway whose logo is missing. --}}
                                         <img class="th-gateway-logo" src="{{ $gateway->image }}"
                                              alt="{{ $gateway->name }}"
-                                             onerror="this.style.display='none'">
+                                             onerror="this.style.display='none'; this.closest('.th-gateway').classList.add('is-logoless')">
                                         <span class="th-gateway-name">{{ $gateway->name }}</span>
                                         <span class="th-gateway-check"><i class="fas fa-check"></i></span>
                                     </button>
@@ -177,7 +179,20 @@
                                 <template x-if="payment_method && !isFreeAfterCoupon">
                                     <div class="th-summary-row">
                                         <span>{{ __('Pay with') }}</span>
-                                        <span x-text="payment_method"></span>
+                                        {{-- The gateway logos are wordmarks, so the name beside one
+                                             would only repeat it. Only a gateway with no logo is
+                                             named in writing. --}}
+                                        <span class="th-pay-with">
+                                            <template x-if="gatewayLogo(payment_method)">
+                                                <img class="th-pay-with-logo" :src="gatewayLogo(payment_method)"
+                                                     :alt="payment_method"
+                                                     {{-- x-on: spelled out, because Blade owns @error --}}
+                                                     x-on:error="gatewayLogos[payment_method] = null">
+                                            </template>
+                                            <template x-if="!gatewayLogo(payment_method)">
+                                                <span x-text="payment_method"></span>
+                                            </template>
+                                        </span>
                                     </div>
                                 </template>
                             </div>
@@ -212,6 +227,7 @@
                 productId: window.location.pathname.split('/').pop(),
                 productIsFreeFromServer: @json($productIsFree),
                 payment_method: null,
+                gatewayLogos: @json(collect($paymentGateways)->pluck('image', 'name')),
                 coupon_code: '',
                 appliedCouponCode: '',
                 submitted: false,
@@ -219,6 +235,10 @@
                 totalPrice: {{ $total }},
                 couponType: null,
                 couponDiscountedValue: 0,
+
+                gatewayLogo(name) {
+                    return this.gatewayLogos[name] || null;
+                },
 
                 get isFreeAfterCoupon() {
                     return this.productIsFreeFromServer || Number(this.totalPrice) <= 0;
@@ -268,8 +288,6 @@
                                 icon: 'error',
                                 title: 'Oops...',
                                 text: "{{ __('The coupon code you entered is invalid or cannot be applied to this product.') }}",
-                                background: '#212129',
-                                color: '#eef1f7',
                             })
                         }))
 
@@ -279,8 +297,6 @@
                                 icon: 'error',
                                 title: 'Oops...',
                                 text: response?.error ?? "{{ __('The coupon code you entered is invalid or cannot be applied to this product.') }}",
-                                background: '#212129',
-                                color: '#eef1f7',
                             })
                         }
                         return
@@ -289,8 +305,6 @@
                     Swal.fire({
                         icon: 'success',
                         text: "{{ __('The coupon was successfully added to your purchase.') }}",
-                        background: '#212129',
-                        color: '#eef1f7',
                     })
 
                     this.appliedCouponCode = String(response.couponCode || '').trim()

@@ -3,7 +3,7 @@
 @section('page-title', __('Create Server'))
 
 @section('content')
-    <section x-data="serverApp()">
+    <section x-data="serverApp()" x-init="init()">
         <div class="th-page-head d-flex flex-wrap align-items-end justify-content-between" style="gap:1rem">
             <div>
                 <h2 class="th-page-title">{{ __('Create Server') }}</h2>
@@ -309,6 +309,17 @@
                  * @note called whenever a nest is selected
                  * @see selectedNest
                  */
+                /**
+                 * @description preselect anything there is only one of, so
+                 * the customer is not asked to "choose" from a list of one
+                 */
+                async init() {
+                    if (this.nests.length === 1) {
+                        this.selectedNest = this.nests[0].id;
+                        await this.setEggs();
+                    }
+                },
+
                 async setEggs() {
                     this.fetchedLocations = false;
                     this.fetchedProducts = false;
@@ -369,7 +380,7 @@
                     this.locations = response.data
 
                     //automatically select the first entry if there is only 1
-                    if (this.locations.length === 1 && this.locations[0]?.nodes?.length === 1) {
+                    if (this.locations.length === 1) {
                         this.selectedLocation = this.locations[0]?.id;
 
                         await this.fetchProducts();

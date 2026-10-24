@@ -81,7 +81,8 @@
                     <h1 class="th-auth-card-title">{{ __('Create your account') }}</h1>
                     <p class="th-auth-card-sub">{{ __('An email and a password is all it takes.') }}</p>
 
-                    <form method="POST" action="{{ route('register') }}">
+                    <form method="POST" action="{{ route('register') }}"
+                          data-busy="{{ __('Creating account') }}">
                         @csrf
 
                         @error('ip')

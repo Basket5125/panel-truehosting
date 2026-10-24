@@ -64,26 +64,32 @@
                         <h3 class="th-card-title">{{ __('Price per unit') }}</h3>
                     </div>
                     <div class="th-card-body">
-                        <div class="row">
+                        <div class="th-pricegrid">
+                            <span></span>
+                            <span class="th-pricegrid-head">{{ $credits_display_name }}</span>
+                            <span class="th-pricegrid-head" id="moneyColumnHead">
+                                {{ strtoupper($val('currency_code', 'EUR')) }}
+                            </span>
+
                             @foreach ([
-                                'price_cpu' => __('per vCPU') . ' (100%)',
-                                'price_memory' => __('per GB RAM'),
-                                'price_disk' => __('per GB disk'),
-                                'price_backup' => __('per backup'),
-                                'price_database' => __('per database'),
-                                'price_allocation' => __('per port'),
-                            ] as $field => $label)
-                                <div class="col-md-6">
-                                    <div class="th-field">
-                                        <label class="th-label" for="{{ $field }}">{{ $label }}</label>
-                                        <input id="{{ $field }}" class="form-control" name="{{ $field }}"
-                                               type="number" step="0.01" min="0" value="{{ $money($field, '0.00') }}" required>
-                                    </div>
-                                </div>
+                                'cpu' => __('per vCPU') . ' (100%)',
+                                'memory' => __('per GB RAM'),
+                                'disk' => __('per GB disk'),
+                                'backup' => __('per backup'),
+                                'database' => __('per database'),
+                                'allocation' => __('per port'),
+                            ] as $key => $label)
+                                <label class="th-label mb-0" for="price_{{ $key }}">{{ $label }}</label>
+                                <input id="price_{{ $key }}" class="form-control" name="price_{{ $key }}"
+                                       type="number" step="0.01" min="0"
+                                       value="{{ $money('price_' . $key, '0.00') }}" required>
+                                <input id="money_price_{{ $key }}" class="form-control" name="money_price_{{ $key }}"
+                                       type="number" step="0.01" min="0"
+                                       value="{{ $money('money_price_' . $key, '0.00') }}" required>
                             @endforeach
                         </div>
-                        <p class="text-muted mb-0" style="font-size:.8rem">
-                            {{ __('Leave a price at 0 to hide that resource from the configurator.') }}
+                        <p class="text-muted mb-0 mt-3" style="font-size:.8rem">
+                            {{ __('A resource priced at 0 in both columns is hidden from the configurator. The customer is charged from the column matching the payment they picked.') }}
                         </p>
                     </div>
                 </div>
@@ -111,16 +117,22 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="th-field">
-                                    <label class="th-label" for="credit_rate">{{ __('Money per 1 credit') }}</label>
+                                    <label class="th-label" for="credit_rate">
+                                        {{ __('Money per 1 credit') }}
+                                        <i class="fas fa-info-circle th-hint"
+                                           data-toggle="popover" data-trigger="hover"
+                                           data-content="{{ __('Only used by plans with no money price list: the money total is then the credit total times this rate. Leave it at 0 once you have filled the currency column above.') }}"></i>
+                                    </label>
                                     <input id="credit_rate" class="form-control" type="number" step="0.0001" min="0"
-                                           name="credit_rate" value="{{ $val('credit_rate', 0) }}" required>
+                                           name="credit_rate" value="{{ $val('credit_rate', 0) }}">
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="th-field">
                                     <label class="th-label" for="currency_code">{{ __('Currency') }}</label>
                                     <input id="currency_code" class="form-control" maxlength="3" name="currency_code"
-                                           value="{{ $val('currency_code', 'EUR') }}" required>
+                                           value="{{ $val('currency_code', 'EUR') }}" required
+                                           oninput="document.getElementById('moneyColumnHead').textContent = this.value.toUpperCase()">
                                 </div>
                             </div>
                             <div class="col-md-3">
@@ -132,7 +144,7 @@
                             </div>
                         </div>
                         <p class="text-muted mb-0" style="font-size:.8rem">
-                            {{ __('Direct price = price in credits × this rate. After the paid period ends, the server keeps running for the grace days, then it is suspended.') }}
+                            {{ __('Direct payments are charged from the currency column of the price list. After the paid period ends, the server keeps running for the grace days, then it is suspended.') }}
                         </p>
                     </div>
                 </div>

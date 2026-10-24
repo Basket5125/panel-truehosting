@@ -165,7 +165,9 @@
                         </div>
 
                         @if ($server->isDirectBilled())
-                            @php($plan = $product->customPlan)
+                            @php
+                                $plan = $product->customPlan;
+                            @endphp
                             <div class="th-renew">
                                 @if ($plan?->allowsCredits())
                                     <form method="POST" action="{{ route('servers.renew', $server->id) }}">
@@ -177,11 +179,29 @@
                                     </form>
                                 @endif
                                 @if ($plan?->allowsDirect())
+                                    @php
+                                        // What the next period actually costs, so the button is not
+                                        // a blind click through to a checkout.
+                                        $renewResources = [
+                                            'cpu' => (int) $product->cpu,
+                                            'memory' => (int) $product->memory,
+                                            'disk' => (int) $product->disk,
+                                            'backups' => (int) $product->backups,
+                                            'databases' => (int) $product->databases,
+                                            'allocations' => (int) $product->allocations,
+                                        ];
+                                        $renewMoney = $plan->hasMoneyPrices()
+                                            ? $plan->moneyPriceFor($renewResources)
+                                            : (int) round($product->price * (float) $plan->credit_rate);
+                                    @endphp
                                     <form method="POST" action="{{ route('servers.renew', $server->id) }}">
                                         @csrf
                                         <input type="hidden" name="mode" value="direct">
                                         <button type="submit" class="th-btn th-btn-primary th-btn-sm">
                                             <i class="far fa-credit-card"></i>{{ __('Extend and pay') }}
+                                            <span style="opacity:.8">
+                                                {{ Currency::formatToCurrency($renewMoney, $plan->currency_code) }}
+                                            </span>
                                         </button>
                                     </form>
                                 @endif
@@ -226,8 +246,6 @@
                 title: '{{ __('Copied') }}',
                 position: 'top-end',
                 showConfirmButton: false,
-                background: '#212129',
-                color: '#eef1f7',
                 toast: true,
                 timer: 1400,
             });
@@ -246,8 +264,6 @@
 
         const thConfirm = (opts) => Swal.fire(Object.assign({
             icon: 'warning',
-            background: '#212129',
-            color: '#eef1f7',
             confirmButtonColor: '#ef4444',
             cancelButtonColor: '#2a2a33',
             showCancelButton: true,
@@ -265,8 +281,6 @@
                 title: "{{ __('Error') }}",
                 text: "{{ __('Something went wrong, please try again later.') }}",
                 icon: 'error',
-                background: '#212129',
-                color: '#eef1f7',
                 confirmButtonColor: '#ef4444',
             });
         });
