@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Models\Server;
 use App\Models\User;
 use App\Models\Product;
@@ -23,7 +23,7 @@ class ServerCreationService
     private UserSettings $userSettings;
     private GeneralSettings $generalSettings;
     private ServerSettings $serverSettings;
-    private PterodactylClient $pterodactylClient;
+    private GamePanelClient $pterodactylClient;
     private CreditService $creditService;
 
     /**
@@ -35,7 +35,7 @@ class ServerCreationService
         $this->userSettings = app(UserSettings::class);
         $this->generalSettings = app(GeneralSettings::class);
         $this->serverSettings = app(ServerSettings::class);
-        $this->pterodactylClient = app(PterodactylClient::class, [$this->pterodactylSettings]);
+        $this->pterodactylClient = app(GamePanelClient::class, [$this->pterodactylSettings]);
         $this->creditService = app(CreditService::class);
     }
 
@@ -73,12 +73,17 @@ class ServerCreationService
                 throw new \Exception('Egg not attached to this product.');
             }
 
-            $credits = (int) round($product->price);
+            // A server paid for with money has already been settled; its credit
+            // price must not be taken a second time.
+            $paidOutOfBand = (bool) ($data['skip_credits'] ?? false);
+            $credits = $paidOutOfBand ? 0 : (int) round($product->price);
 
-            // Reserve credits first (outside server insert transaction) to avoid lock ordering issues
-            // between users and servers tables under high concurrency.
-            $this->reserveCredits($user, $credits);
-            $creditsReserved = true;
+            if ($credits > 0) {
+                // Reserve credits first (outside server insert transaction) to avoid lock ordering issues
+                // between users and servers tables under high concurrency.
+                $this->reserveCredits($user, $credits);
+                $creditsReserved = true;
+            }
 
             DB::transaction(function () use ($user, $product, $validatedData, $data, &$server) {
                 $server = Server::create([
@@ -146,7 +151,8 @@ class ServerCreationService
             ? $product->price
             : $product->minimum_credits;
 
-        if ($user->credits < $minCredits) {
+        // Skipped when the period was already paid for with money.
+        if (!($data['skip_credits'] ?? false) && $user->credits < $minCredits) {
             throw new \Exception(
                 sprintf(
                     'User do not have the required amount of %s to use this product!',

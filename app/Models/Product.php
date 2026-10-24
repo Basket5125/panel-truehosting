@@ -168,6 +168,11 @@ class Product extends Model
     /**
      * @return BelongsToMany
      */
+    public function customPlan(): BelongsTo
+    {
+        return $this->belongsTo(CustomPlan::class, 'custom_plan_id');
+    }
+
     public function nodes()
     {
         return $this->belongsToMany(Node::class);

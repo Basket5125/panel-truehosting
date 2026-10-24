@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Helpers\CurrencyHelper;
 use App\Settings\PterodactylSettings;
 use App\Settings\GeneralSettings;
@@ -28,7 +28,7 @@ class OverViewController extends Controller
 
     public function __construct(PterodactylSettings $ptero_settings)
     {
-        $this->pterodactyl = new PterodactylClient($ptero_settings);
+        $this->pterodactyl = app(GamePanelClient::class);
     }
 
     public function index(GeneralSettings $general_settings, CurrencyHelper $currencyHelper)
@@ -161,8 +161,17 @@ class OverViewController extends Controller
             } //Check if node exists on pterodactyl too, if not, skip
             $nodes->put($nodeId, collect());
             $nodes[$nodeId]->name = $DBnode['name'];
-            $pteroNode = $this->pterodactyl->getNode($nodeId);
-            $nodes[$nodeId]->usagePercent = round(max($pteroNode['allocated_resources']['memory'] / ($pteroNode['memory'] * ($pteroNode['memory_overallocate'] + 100) / 100), $pteroNode['allocated_resources']['disk'] / ($pteroNode['disk'] * ($pteroNode['disk_overallocate'] + 100) / 100)) * 100, 2);
+            // Not every panel reports node capacity (FeatherPanel does not),
+            // and a node with no limits set would divide by zero.
+            $capacity = $this->pterodactyl->getNodeCapacity($nodeId);
+            $nodes[$nodeId]->usagePercent = 0;
+
+            if ($capacity && $capacity['memory'] > 0 && $capacity['disk'] > 0) {
+                $nodes[$nodeId]->usagePercent = round(max(
+                    $capacity['used_memory'] / $capacity['memory'],
+                    $capacity['used_disk'] / $capacity['disk']
+                ) * 100, 2);
+            }
             $counters['totalUsagePercent'] += $nodes[$nodeId]->usagePercent;
 
             $nodes[$nodeId]->totalServers = 0;

@@ -60,7 +60,6 @@
             </div>
         </div>
         <!-- END CUSTOM CONTENT -->
-        </div>
     </section>
     <!-- END CONTENT -->
 

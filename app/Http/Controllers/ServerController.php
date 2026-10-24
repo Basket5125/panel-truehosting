@@ -16,7 +16,7 @@ use App\Settings\UserSettings;
 use App\Settings\ServerSettings;
 use App\Services\ServerCreationService;
 use App\Settings\PterodactylSettings;
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Enums\BillingPriority;
 use App\Settings\GeneralSettings;
 use Exception;
@@ -46,7 +46,7 @@ class ServerController extends Controller
         'annually' => 31104000
     ];
 
-    private PterodactylClient $pterodactyl;
+    private GamePanelClient $pterodactyl;
     private PterodactylSettings $pteroSettings;
     private GeneralSettings $generalSettings;
     private ServerSettings $serverSettings;
@@ -63,7 +63,7 @@ class ServerController extends Controller
         ServerCreationService $serverCreationService
     ) {
         $this->pteroSettings = $pteroSettings;
-        $this->pterodactyl = new PterodactylClient($pteroSettings);
+        $this->pterodactyl = app(GamePanelClient::class);
         $this->generalSettings = $generalSettings;
         $this->serverSettings = $serverSettings;
         $this->userSettings = $userSettings;
@@ -260,11 +260,7 @@ class ServerController extends Controller
     private function updateServerInfo(Server $server, array $serverInfo): void
     {
         try {
-            if (!isset($serverInfo['relationships'])) {
-                return;
-            }
-
-            $relationships = $serverInfo['relationships'];
+            $relationships = $serverInfo['relationships'] ?? [];
             $locationAttrs = $relationships['location']['attributes'] ?? [];
             $eggAttrs = $relationships['egg']['attributes'] ?? [];
             $nestAttrs = $relationships['nest']['attributes'] ?? [];
@@ -274,6 +270,35 @@ class ServerController extends Controller
             $server->egg = $eggAttrs['name'] ?? null;
             $server->nest = $nestAttrs['name'] ?? null;
             $server->node = $nodeAttrs['name'] ?? null;
+
+            // Not every panel embeds the related records; the synced tables hold
+            // the same names, so they are used as the fallback.
+            if (!$server->node && isset($serverInfo['node'])) {
+                $node = \App\Models\Pterodactyl\Node::find($serverInfo['node']);
+                $server->node = $node?->name;
+                $server->location = $server->location
+                    ?: \App\Models\Pterodactyl\Location::find($node?->location_id)?->name;
+            }
+
+            if (!$server->egg && isset($serverInfo['egg'])) {
+                $server->egg = \App\Models\Pterodactyl\Egg::find($serverInfo['egg'])?->name;
+            }
+
+            if (!$server->nest && isset($serverInfo['nest'])) {
+                $server->nest = \App\Models\Pterodactyl\Nest::find($serverInfo['nest'])?->name;
+            }
+
+            // Connection address and the live power state, both optional.
+            $allocation = $relationships['allocations']['data'][0]['attributes'] ?? null;
+
+            if ($allocation) {
+                $host = $allocation['alias'] ?: ($allocation['ip'] ?? null);
+                $server->address = $host && isset($allocation['port'])
+                    ? $host . ':' . $allocation['port']
+                    : null;
+            }
+
+            $server->state = $serverInfo['status'] ?? null;
 
             if (isset($serverInfo['name']) && $server->name !== $serverInfo['name']) {
                 $server->name = $serverInfo['name'];
@@ -392,7 +417,8 @@ class ServerController extends Controller
     {
         $currentProduct = Product::find($server->product_id);
         $nodeId = $serverInfo['relationships']['node']['attributes']['id'];
-        $pteroNode = $this->pterodactyl->getNode($nodeId);
+        // Capacity, not the raw node: null when the panel does not report it.
+        $pteroNode = $this->pterodactyl->getNodeCapacity($nodeId);
         $currentEgg = $serverInfo['egg'];
 
         //$currentProductEggs = $currentProduct->eggs->pluck('id')->toArray();
@@ -412,12 +438,13 @@ class ServerController extends Controller
                 $memoryDiff = $product->memory - $currentProduct->memory;
                 $diskDiff = $product->disk - $currentProduct->disk;
 
-                $maxMemory = ($pteroNode['memory'] * ($pteroNode['memory_overallocate'] + 100) / 100);
-                $maxDisk = ($pteroNode['disk'] * ($pteroNode['disk_overallocate'] + 100) / 100);
-
-                if ($memoryDiff > $maxMemory - $pteroNode['allocated_resources']['memory'] ||
-                    $diskDiff > $maxDisk - $pteroNode['allocated_resources']['disk']) {
-                    $product->doesNotFit = true;
+                // $pteroNode is null when the panel does not report capacity;
+                // an unknown limit must not be treated as "does not fit".
+                if ($pteroNode !== null) {
+                    if ($memoryDiff > $pteroNode['memory'] - $pteroNode['used_memory'] ||
+                        $diskDiff > $pteroNode['disk'] - $pteroNode['used_disk']) {
+                        $product->doesNotFit = true;
+                    }
                 }
 
                 return $product;

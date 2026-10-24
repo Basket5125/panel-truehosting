@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\GamePanelClient;
 use App\Helpers\CallHomeHelper;
 use App\Models\UsefulLink;
 use Exception;
@@ -22,7 +23,26 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        // Which game panel the application provisions on is a runtime setting,
+        // so the driver is resolved from the container rather than newed up.
+        $this->app->singleton(\App\Contracts\GamePanelClient::class, function ($app) {
+            try {
+                $feather = $app->make(\App\Settings\FeatherPanelSettings::class);
+
+                if ($feather->isActive()) {
+                    return new \App\Classes\FeatherPanelClient($feather);
+                }
+            } catch (\Throwable $e) {
+                // Settings table not migrated yet: fall through to Pterodactyl.
+                logger('Could not read the game panel driver setting, using Pterodactyl.', ['exception' => $e]);
+            }
+
+            return new \App\Classes\PterodactylClient($app->make(\App\Settings\PterodactylSettings::class));
+        });
+
+        // Anything still asking for the concrete Pterodactyl client gets the
+        // configured driver instead.
+        $this->app->bind(\App\Classes\PterodactylClient::class, fn ($app) => $app->make(\App\Contracts\GamePanelClient::class));
     }
 
     /**

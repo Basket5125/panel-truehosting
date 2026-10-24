@@ -8,7 +8,7 @@ use App\Models\User;
 use App\Settings\DiscordSettings;
 use App\Settings\LocaleSettings;
 use App\Settings\PterodactylSettings;
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use Exception;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\View\Factory;
@@ -41,7 +41,7 @@ class ServerController extends Controller
 
     public function __construct(PterodactylSettings $ptero_settings)
     {
-        $this->pterodactyl = new PterodactylClient($ptero_settings);
+        $this->pterodactyl = app(GamePanelClient::class);
     }
 
     /**

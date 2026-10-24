@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Models\Server;
 use App\Models\User;
 use App\Models\Product;
@@ -13,7 +13,7 @@ use Carbon\CarbonInterval;
 class ServerUpgradeService
 {
     private PterodactylSettings $pterodactylSettings;
-    private PterodactylClient $pterodactylClient;
+    private GamePanelClient $pterodactylClient;
 
     /**
      * Create a new class instance.
@@ -21,7 +21,7 @@ class ServerUpgradeService
     public function __construct()
     {
         $this->pterodactylSettings = app(PterodactylSettings::class);
-        $this->pterodactylClient = app(PterodactylClient::class, [$this->pterodactylSettings]);
+        $this->pterodactylClient = app(GamePanelClient::class, [$this->pterodactylSettings]);
     }
 
     /**

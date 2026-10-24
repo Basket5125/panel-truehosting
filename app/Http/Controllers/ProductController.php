@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Models\Pterodactyl\Egg;
 use App\Models\Pterodactyl\Location;
 use App\Models\Pterodactyl\Node;
@@ -27,7 +27,7 @@ class ProductController extends Controller
 
     public function __construct(PterodactylSettings $ptero_settings)
     {
-        $this->pterodactyl = new PterodactylClient($ptero_settings);
+        $this->pterodactyl = app(GamePanelClient::class);
     }
 
     /**
@@ -76,8 +76,12 @@ class ProductController extends Controller
     {
         $nodes = $this->getNodesBasedOnEgg($request, $egg);
         foreach ($nodes as $key => $node) {
-            $pteroNode = $this->pterodactyl->getNode($node->id);
-            if ($pteroNode['allocated_resources']['memory'] >= ($pteroNode['memory'] * ($pteroNode['memory_overallocate'] + 100) / 100) || $pteroNode['allocated_resources']['disk'] >= ($pteroNode['disk'] * ($pteroNode['disk_overallocate'] + 100) / 100)) {
+            // Only drop a node when the panel actually says it is full.
+            // Unknown capacity must not hide every location.
+            $capacity = $this->pterodactyl->getNodeCapacity($node->id);
+
+            if ($capacity !== null
+                && ($capacity['used_memory'] >= $capacity['memory'] || $capacity['used_disk'] >= $capacity['disk'])) {
                 $nodes->forget($key);
             }
         }
@@ -157,10 +161,17 @@ class ProductController extends Controller
             $product->doesNotFit = true;
 
             foreach ($product->nodes as $node) {
-                $pteroNode = $this->pterodactyl->getNode($node->id);
+                $capacity = $this->pterodactyl->getNodeCapacity($node->id);
 
-                $availableMemory = ($pteroNode['memory'] * ($pteroNode['memory_overallocate'] + 100) / 100) - $pteroNode['allocated_resources']['memory'];
-                $availableDisk = ($pteroNode['disk'] * ($pteroNode['disk_overallocate'] + 100) / 100) - $pteroNode['allocated_resources']['disk'];
+                // Unknown capacity: assume the node can take it rather than
+                // marking every product as not fitting.
+                if ($capacity === null) {
+                    $product->doesNotFit = false;
+                    break;
+                }
+
+                $availableMemory = $capacity['memory'] - $capacity['used_memory'];
+                $availableDisk = $capacity['disk'] - $capacity['used_disk'];
 
                 // If the product fits in this node, mark it as fitting and break out of the loop
                 if ($product->memory <= $availableMemory && $product->disk <= $availableDisk) {

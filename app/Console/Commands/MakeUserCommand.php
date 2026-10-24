@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Models\User;
 use App\Settings\PterodactylSettings;
 use App\Settings\UserSettings;
@@ -49,7 +49,7 @@ class MakeUserCommand extends Command
      */
     public function handle(PterodactylSettings $ptero_settings, UserSettings $user_settings)
     {
-        $this->pterodactyl = new PterodactylClient($ptero_settings);
+        $this->pterodactyl = app(GamePanelClient::class);
         $ptero_id = $this->option('ptero_id') ?? $this->ask('Please specify your Pterodactyl ID.');
         $password = $this->secret('password') ?? $this->ask('Please specify your password.');
 

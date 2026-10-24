@@ -6,7 +6,7 @@ use App\Facades\Currency;
 use App\Models\User;
 use App\Settings\UserSettings;
 use App\Settings\PterodactylSettings;
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Settings\DiscordSettings;
 use App\Settings\ReferralSettings;
 use Illuminate\Http\RedirectResponse;
@@ -21,7 +21,7 @@ class ProfileController extends Controller
 
     public function __construct(PterodactylSettings $ptero_settings)
     {
-        $this->pterodactyl = new PterodactylClient($ptero_settings);
+        $this->pterodactyl = app(GamePanelClient::class);
     }
 
     /** Display a listing of the resource. */
@@ -82,7 +82,7 @@ class ProfileController extends Controller
 
             //Update Users Password on Pterodactyl
             //Username,Mail,First and Lastname are required aswell
-            $response = $this->pterodactyl->application->patch('/application/users/' . $user->pterodactyl_id, [
+            $response = $this->pterodactyl->updateUser($user->pterodactyl_id, [
                 'password' => $request->input('new_password'),
                 'username' => $request->input('name'),
                 'first_name' => $request->input('name'),
@@ -126,7 +126,7 @@ class ProfileController extends Controller
         }
 
         //update name and email on Pterodactyl
-        $response = $this->pterodactyl->application->patch('/application/users/' . $user->pterodactyl_id, [
+        $response = $this->pterodactyl->updateUser($user->pterodactyl_id, [
             'username' => $request->input('name'),
             'first_name' => $request->input('name'),
             'last_name' => $request->input('name'),

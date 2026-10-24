@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Events\ServerDeletedEvent;
 use App\Models\Product;
 use App\Models\User;
@@ -28,7 +28,7 @@ use Exception;
 class ServerController extends Controller
 {
     protected PterodactylSettings $pterodactylSettings;
-    protected PterodactylClient $pterodactylClient;
+    protected GamePanelClient $pterodactylClient;
 
     public function __construct(
         protected ServerCreationService $serverCreationService,
@@ -36,7 +36,7 @@ class ServerController extends Controller
     )
     {
         $this->pterodactylSettings = app(PterodactylSettings::class);
-        $this->pterodactylClient = app(PterodactylClient::class, [$this->pterodactylSettings]);
+        $this->pterodactylClient = app(GamePanelClient::class, [$this->pterodactylSettings]);
     }
 
     public const ALLOWED_INCLUDES = ['product', 'user'];

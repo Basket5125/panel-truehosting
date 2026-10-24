@@ -14,6 +14,7 @@
                         <li class="breadcrumb-item"><a class="text-muted"
                                                        href="{{route('admin.usefullinks.index')}}">{{__('Useful Links')}}</a></li>
                     </ol>
+                </div>
             </div>
         </div>
     </section>

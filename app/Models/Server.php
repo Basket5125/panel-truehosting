@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Carbon\Carbon;
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Enums\BillingPriority;
 use App\Settings\PterodactylSettings;
 use GuzzleHttp\Promise\PromiseInterface;
@@ -24,7 +24,7 @@ class Server extends Model
     use HasFactory;
     use LogsActivity;
 
-    private PterodactylClient $pterodactyl;
+    private GamePanelClient $pterodactyl;
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -87,7 +87,7 @@ class Server extends Model
         parent::__construct();
 
         $ptero_settings = new PterodactylSettings();
-        $this->pterodactyl = new PterodactylClient($ptero_settings);
+        $this->pterodactyl = app(GamePanelClient::class);
     }
 
     public static function boot()
@@ -101,14 +101,37 @@ class Server extends Model
         });
 
         static::deleting(function (Server $server) {
-            $response = $server->pterodactyl->application->delete("/application/servers/{$server->pterodactyl_id}");
-            if ($response->failed() && !is_null($server->pterodactyl_id)) {
-                //only return error when it's not a 404 error
-                if ($response['errors'][0]['status'] != '404') {
-                    throw new Exception($response['errors'][0]['code']);
+            $response = $server->pterodactyl->deleteServer($server->pterodactyl_id);
+            // A server that is already gone from the panel is not an error here;
+            // every other failure is. The status is checked rather than the body
+            // because each panel reports errors in its own shape.
+            if ($response && $response->failed() && !is_null($server->pterodactyl_id)) {
+                if ($response->status() !== 404) {
+                    throw new Exception('Could not delete the server on ' . $server->pterodactyl->panelName() . ' (HTTP ' . $response->status() . ')');
                 }
             }
         });
+    }
+
+    /** Billed by a payment each period rather than from credits. */
+    public function isDirectBilled(): bool
+    {
+        return $this->payment_mode === 'direct';
+    }
+
+    /**
+     * Whether a directly billed server is past its paid period, including the
+     * plan's grace days.
+     */
+    public function isOverdue(): bool
+    {
+        if (!$this->isDirectBilled() || $this->paid_until === null) {
+            return false;
+        }
+
+        $grace = (int) ($this->product?->customPlan?->grace_days ?? 0);
+
+        return \Carbon\Carbon::parse($this->paid_until)->addDays($grace)->isPast();
     }
 
     /**
@@ -124,7 +147,7 @@ class Server extends Model
      */
     public function getPterodactylServer()
     {
-        return $this->pterodactyl->application->get("/application/servers/{$this->pterodactyl_id}");
+        return $this->pterodactyl->getServerById($this->pterodactyl_id);
     }
 
     /**

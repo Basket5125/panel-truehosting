@@ -37,6 +37,7 @@ class EventServiceProvider extends ServiceProvider
         PaymentEvent::class => [
             UserPayment::class,
             CreateInvoice::class,
+            \App\Listeners\ApplyCustomOrderPayment::class,
         ],
         CouponUsedEvent::class => [
             CouponUsed::class

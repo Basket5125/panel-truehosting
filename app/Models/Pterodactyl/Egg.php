@@ -2,7 +2,7 @@
 
 namespace App\Models\Pterodactyl;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -43,7 +43,7 @@ class Egg extends Model
     public static function syncEggs()
     {
         Nest::syncNests();
-        $client = app(PterodactylClient::class);
+        $client = app(GamePanelClient::class);
         Nest::all()->each(function (Nest $nest) use ($client) {
             $eggs = $client->getEggs($nest);
 

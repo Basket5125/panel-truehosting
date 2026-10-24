@@ -2,7 +2,7 @@
 
 namespace App\Models\Pterodactyl;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use Exception;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -33,7 +33,7 @@ class Location extends Model
      */
     public static function syncLocations()
     {
-        $client = app(PterodactylClient::class);
+        $client = app(GamePanelClient::class);
         $locations = $client->getLocations();
 
         //map response

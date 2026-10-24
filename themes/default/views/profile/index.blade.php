@@ -309,8 +309,6 @@
 
         </div>
         <!-- END CUSTOM CONTENT -->
-
-        </div>
     </section>
     <!-- END CONTENT -->
     <script>

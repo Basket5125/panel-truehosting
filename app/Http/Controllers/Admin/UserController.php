@@ -8,7 +8,7 @@ use App\Models\User;
 use App\Notifications\DynamicNotification;
 use App\Settings\LocaleSettings;
 use App\Settings\PterodactylSettings;
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Helpers\CurrencyHelper;
 use App\Settings\GeneralSettings;
 use App\Actions\ProcessReferralAction;
@@ -56,7 +56,7 @@ class UserController extends Controller
 
     public function __construct(PterodactylSettings $ptero_settings)
     {
-        $this->pterodactyl = new PterodactylClient($ptero_settings);
+        $this->pterodactyl = app(GamePanelClient::class);
     }
 
     /**
@@ -318,6 +318,63 @@ class UserController extends Controller
     }
 
     /**
+     * Delete several users at once.
+     *
+     * Useful for clearing out bot registrations. The same guards as the single
+     * delete apply, and anything skipped is reported rather than silently
+     * ignored.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $this->checkPermission(self::DELETE_PERMISSION);
+
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1|max:500',
+            'ids.*' => 'integer',
+        ]);
+
+        $deleted = 0;
+        $skipped = [];
+
+        // How many admins exist decides whether the last one may go.
+        $adminCount = User::role(1)->count();
+
+        foreach (User::whereIn('id', $validated['ids'])->get() as $user) {
+            if ($user->id === $request->user()->id) {
+                $skipped[] = $user->name . ' (' . __('that is you') . ')';
+
+                continue;
+            }
+
+            if ($user->hasRole(1)) {
+                if ($adminCount <= 1) {
+                    $skipped[] = $user->name . ' (' . __('last admin') . ')';
+
+                    continue;
+                }
+
+                $adminCount--;
+            }
+
+            try {
+                $user->delete();
+                $deleted++;
+            } catch (Exception $e) {
+                $skipped[] = $user->name . ' (' . $e->getMessage() . ')';
+            }
+        }
+
+        $message = __(':count users removed', ['count' => $deleted]);
+
+        if ($skipped) {
+            return redirect()->back()
+                ->with('warning', $message . ' — ' . __('skipped') . ': ' . implode(', ', $skipped));
+        }
+
+        return redirect()->back()->with('success', $message);
+    }
+
+    /**
      * Verifys the users email
      *
      * @param  User  $user
@@ -493,6 +550,9 @@ class UserController extends Controller
             ->where('model_has_roles.model_type', User::class);
 
         return datatables($query)
+            ->addColumn('select', function (User $user) {
+                return '<input type="checkbox" class="th-bulk-item" value="' . $user->id . '" aria-label="select user">';
+            })
             ->addColumn('avatar', function (User $user) {
                 return '<img width="28px" height="28px" class="ml-1 rounded-circle" src="' . $user->getAvatar() . '">';
             })
@@ -542,7 +602,7 @@ class UserController extends Controller
                 return '<a class="text-info" target="_blank" href="' . $ptero_settings->panel_url . '/admin/users/view/' . $user->pterodactyl_id . '">' . e($user->name) . '</a>';
             })
             ->orderColumn('role', 'role_name $1')
-            ->rawColumns(['avatar', 'name', 'credits', 'role', 'usage',  'actions'])
+            ->rawColumns(['select', 'avatar', 'name', 'credits', 'role', 'usage',  'actions'])
             ->make();
     }
 }

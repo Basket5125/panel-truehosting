@@ -2,7 +2,7 @@
 
 namespace App\Models\Pterodactyl;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -32,7 +32,7 @@ class Nest extends Model
 
     public static function syncNests()
     {
-        $client = app(PterodactylClient::class);
+        $client = app(GamePanelClient::class);
         $nests = $client->getNests();
 
         //map response

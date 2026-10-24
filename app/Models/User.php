@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Notifications\Auth\QueuedVerifyEmail;
 use App\Notifications\WelcomeMessage;
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Facades\Currency;
 use App\Settings\PterodactylSettings;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -31,7 +31,7 @@ class User extends Authenticatable implements MustVerifyEmail
 {
     use HasFactory, Notifiable, LogsActivity, CausesActivity, HasRoles;
 
-    private PterodactylClient $pterodactyl;
+    private GamePanelClient $pterodactyl;
 
     /**
      * @var string[]
@@ -101,7 +101,7 @@ class User extends Authenticatable implements MustVerifyEmail
         parent::__construct();
 
         $ptero_settings = new PterodactylSettings();
-        $this->pterodactyl = new PterodactylClient($ptero_settings);
+        $this->pterodactyl = app(GamePanelClient::class);
     }
 
     public static function boot()
@@ -144,7 +144,7 @@ class User extends Authenticatable implements MustVerifyEmail
                     ]);
             }
 
-            $user->pterodactyl->application->delete("/application/users/{$user->pterodactyl_id}");
+            $user->pterodactyl->deleteUser($user->pterodactyl_id);
         });
     }
 
@@ -304,6 +304,11 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function getAvatar()
     {
+        // An uploaded avatar is stored as a data URL; fall back to Gravatar.
+        if (!empty($this->avatar)) {
+            return $this->avatar;
+        }
+
         return 'https://www.gravatar.com/avatar/' . md5(strtolower(trim($this->email)));
     }
 

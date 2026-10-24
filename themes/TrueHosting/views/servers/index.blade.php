@@ -1,0 +1,303 @@
+@extends('layouts.main')
+
+@section('page-title', __('Servers'))
+
+@section('content')
+    @php
+        $atLimit = Auth::user()->Servers->count() >= Auth::user()->server_limit;
+    @endphp
+
+    <div class="th-page-head d-flex flex-wrap align-items-end justify-content-between" style="gap:1rem">
+        <div>
+            <h2 class="th-page-title">{{ __('Servers') }}</h2>
+            <p class="th-page-sub">
+                {{ Auth::user()->Servers->count() }} / {{ Auth::user()->server_limit }}
+                {{ __('servers used') }}
+            </p>
+        </div>
+
+        <div class="d-flex flex-wrap" style="gap:.5rem">
+            @if (Auth::user()->Servers->count() > 0 && !empty($phpmyadmin_url))
+                <a href="{{ $phpmyadmin_url }}" target="_blank" class="th-btn th-btn-ghost">
+                    <i class="fas fa-database"></i>{{ __('Database') }}
+                </a>
+            @endif
+
+            <a href="{{ route('servers.create') }}"
+               class="th-btn th-btn-primary @if ($atLimit) disabled @endif @cannot('user.server.create') disabled @endcannot"
+               @if ($atLimit) title="{{ __('Server limit reached!') }}" @endif
+               @cannot('user.server.create') title="{{ __('No Permission!') }}" @endcannot>
+                <i class="fas fa-plus"></i>{{ __('Create Server') }}
+            </a>
+        </div>
+    </div>
+
+    @if ($servers->count() == 0)
+        <div class="th-empty">
+            <i class="fas fa-server d-block"></i>
+            <h3 class="th-empty-title">{{ __('You have no servers yet') }}</h3>
+            <p class="th-empty-text">
+                {{ __('Pick a plan and a location. The server starts right after that.') }}
+            </p>
+            <a href="{{ route('servers.create') }}"
+               class="th-btn th-btn-primary @if ($atLimit) disabled @endif">
+                <i class="fas fa-plus"></i>{{ __('Create Server') }}
+            </a>
+        </div>
+    @else
+        <div class="th-grid">
+            @foreach ($servers as $server)
+                @php
+                        $product = $server->product;
+
+                        $nextBilling = null;
+                        if (!$server->suspended && $server->last_billed) {
+                            $base = \Carbon\Carbon::parse($server->last_billed);
+                            $nextBilling = match ($product->billing_period) {
+                                'hourly'        => $base->copy()->addHour(),
+                                'daily'         => $base->copy()->addDay(),
+                                'weekly'        => $base->copy()->addWeek(),
+                                'monthly'       => $base->copy()->addMonth(),
+                                'quarterly'     => $base->copy()->addMonths(3),
+                                'half-annually' => $base->copy()->addMonths(6),
+                                'annually'      => $base->copy()->addYear(),
+                                default         => null,
+                            };
+                        }
+
+                        $periodLabel = match ($product->billing_period) {
+                            'hourly'        => __('per Hour'),
+                            'daily'         => __('per Day'),
+                            'weekly'        => __('per Week'),
+                            'monthly'       => __('per Month'),
+                            'quarterly'     => __('per 3 Months'),
+                            'half-annually' => __('per 6 Months'),
+                            'annually'      => __('per Year'),
+                            default         => '',
+                        };
+                    @endphp
+
+                    <div class="th-server-card">
+
+                        <div class="th-server-head">
+                            <span class="th-stat-icon" style="width:40px;height:40px;font-size:.95rem">
+                                <i class="fas fa-server"></i>
+                            </span>
+                            <div style="min-width:0;flex:1 1 auto">
+                                <h3 class="th-server-name">{{ $server->name }}</h3>
+                                <span class="th-server-meta">{{ $server->nest }} &middot; {{ $server->egg }}</span>
+                            </div>
+
+                            @php
+                                // Billing state wins over the panel's power state.
+                                $state = strtolower((string) ($server->state ?? ''));
+                                [$stateClass, $stateLabel] = match (true) {
+                                    (bool) $server->suspended => ['is-suspended', __('Suspended')],
+                                    (bool) $server->canceled => ['is-pending', __('Canceled')],
+                                    $state === 'running' => ['is-online', __('Running')],
+                                    in_array($state, ['starting', 'installing', 'restarting'], true) => ['is-pending', __('Starting')],
+                                    in_array($state, ['stopping'], true) => ['is-pending', __('Stopping')],
+                                    in_array($state, ['offline', 'stopped'], true) => ['', __('Offline')],
+                                    default => ['is-online', __('Active')],
+                                };
+                            @endphp
+                            <span class="th-status {{ $stateClass }}">{{ $stateLabel }}</span>
+                        </div>
+
+                        @if (!empty($server->address))
+                            <div class="th-address" title="{{ __('Server address') }}">
+                                <i class="fas fa-network-wired"></i>
+                                <code id="addr-{{ $server->id }}">{{ $server->address }}</code>
+                                <button type="button" class="th-address-copy"
+                                        onclick="thCopyAddress('{{ $server->id }}')"
+                                        title="{{ __('Click to copy') }}">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        @endif
+
+                        <ul class="th-specs">
+                            <li class="th-spec">
+                                <i class="fas fa-microchip"></i>
+                                {{ $product->cpu == 0 ? __('Unlimited') : ($product->cpu / 100) }} {{ __('vCores') }}
+                            </li>
+                            <li class="th-spec">
+                                <i class="fas fa-memory"></i>
+                                {{ $product->memory == 0 ? __('Unlimited') : $product->memory . ' MB' }}
+                            </li>
+                            <li class="th-spec">
+                                <i class="fas fa-hdd"></i>
+                                {{ $product->disk == 0 ? __('Unlimited') : $product->disk . ' MB' }}
+                            </li>
+                            <li class="th-spec">
+                                <i class="fas fa-map-marker-alt"></i>
+                                {{ $server->location }}
+                            </li>
+                            <li class="th-spec"
+                                data-toggle="popover" data-trigger="hover" data-html="true"
+                                data-content="{{ __('Backups') }}: {{ $product->backups }}<br/>{{ __('MySQL Databases') }}: {{ $product->databases }}<br/>{{ __('Allocations') }}: {{ $product->allocations }}<br/>{{ __('OOM Killer') }}: {{ $product->oom_killer ? __('enabled') : __('disabled') }}<br/>{{ __('Node') }}: {{ $server->node }}"
+                                style="cursor:help">
+                                <i class="fas fa-info-circle"></i>
+                                {{ $product->name }}
+                            </li>
+                        </ul>
+
+                        <div class="d-flex justify-content-between align-items-end mt-3 pt-3"
+                             style="border-top:1px solid var(--glass-border);gap:1rem">
+                            <div style="min-width:0">
+                                @if ($server->isDirectBilled())
+                                    <span class="th-stat-label">{{ __('Paid until') }}</span>
+                                    <span style="font-size:.84rem">
+                                        {{ $server->paid_until ? \Carbon\Carbon::parse($server->paid_until)->toDayDateTimeString() : '—' }}
+                                    </span>
+                                @else
+                                    <span class="th-stat-label">{{ __('Next Billing Cycle') }}</span>
+                                    <span style="font-size:.84rem">
+                                        {{ $nextBilling ? $nextBilling->toDayDateTimeString() : '—' }}
+                                    </span>
+                                @endif
+                            </div>
+                            <div class="text-right" style="white-space:nowrap">
+                                <span class="th-stat-label">{{ $credits_display_name }}</span>
+                                <strong style="font-size:1.02rem">{{ $product->display_price }}</strong>
+                                <span class="d-block text-muted" style="font-size:.74rem">{{ $periodLabel }}</span>
+                            </div>
+                        </div>
+
+                        @if ($server->isDirectBilled())
+                            @php($plan = $product->customPlan)
+                            <div class="th-renew">
+                                @if ($plan?->allowsCredits())
+                                    <form method="POST" action="{{ route('servers.renew', $server->id) }}">
+                                        @csrf
+                                        <input type="hidden" name="mode" value="credits">
+                                        <button type="submit" class="th-btn th-btn-ghost th-btn-sm">
+                                            <i class="fas fa-coins"></i>{{ __('Extend from credits') }}
+                                        </button>
+                                    </form>
+                                @endif
+                                @if ($plan?->allowsDirect())
+                                    <form method="POST" action="{{ route('servers.renew', $server->id) }}">
+                                        @csrf
+                                        <input type="hidden" name="mode" value="direct">
+                                        <button type="submit" class="th-btn th-btn-primary th-btn-sm">
+                                            <i class="far fa-credit-card"></i>{{ __('Extend and pay') }}
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
+                        @endif
+
+                        <div class="th-card-foot">
+                            <a href="{{ $pterodactyl_url }}/server/{{ $server->identifier }}" target="__blank"
+                               class="th-btn th-btn-primary" style="flex:1 1 auto"
+                               data-toggle="tooltip" data-placement="bottom" title="{{ __('Manage Server') }}">
+                                <i class="fas fa-tools"></i>{{ __('Manage') }}
+                            </a>
+                            <a href="{{ route('servers.show', ['server' => $server->id]) }}"
+                               class="th-btn th-btn-ghost"
+                               data-toggle="tooltip" data-placement="bottom" title="{{ __('Server Settings') }}">
+                                <i class="fas fa-cog"></i>
+                            </a>
+                            <button onclick="handleServerCancel('{{ $server->id }}');"
+                                    class="th-btn th-btn-ghost"
+                                    {{ $server->suspended || $server->canceled ? 'disabled' : '' }}
+                                    data-toggle="tooltip" data-placement="bottom" title="{{ __('Cancel Server') }}">
+                                <i class="fas fa-ban"></i>
+                            </button>
+                            <button onclick="handleServerDelete('{{ $server->id }}');"
+                                    class="th-btn th-btn-ghost" style="color:#f87171"
+                                    data-toggle="tooltip" data-placement="bottom" title="{{ __('Delete Server') }}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+            @endforeach
+        </div>
+    @endif
+
+    <script>
+        function thCopyAddress(id) {
+            const el = document.getElementById('addr-' + id);
+            if (!el) return;
+
+            const done = () => Swal.fire({
+                icon: 'success',
+                title: '{{ __('Copied') }}',
+                position: 'top-end',
+                showConfirmButton: false,
+                background: '#212129',
+                color: '#eef1f7',
+                toast: true,
+                timer: 1400,
+            });
+
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(el.textContent.trim()).then(done);
+            } else {
+                const r = document.createRange();
+                r.selectNode(el);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(r);
+                document.execCommand('copy');
+                done();
+            }
+        }
+
+        const thConfirm = (opts) => Swal.fire(Object.assign({
+            icon: 'warning',
+            background: '#212129',
+            color: '#eef1f7',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#2a2a33',
+            showCancelButton: true,
+            reverseButtons: true,
+            cancelButtonText: "{{ __('No, abort!') }}",
+        }, opts));
+
+        const thRequest = (url, method) => fetch(url, {
+            method: method,
+            headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}
+        }).then(() => {
+            window.location.reload();
+        }).catch(() => {
+            Swal.fire({
+                title: "{{ __('Error') }}",
+                text: "{{ __('Something went wrong, please try again later.') }}",
+                icon: 'error',
+                background: '#212129',
+                color: '#eef1f7',
+                confirmButtonColor: '#ef4444',
+            });
+        });
+
+        const handleServerCancel = (serverId) => {
+            thConfirm({
+                title: "{{ __('Cancel Server?') }}",
+                text: "{{ __('This will cancel your current server to the next billing period. It will get suspended when the current period runs out.') }}",
+                confirmButtonText: "{{ __('Yes, cancel it!') }}",
+            }).then((result) => {
+                if (result.value) {
+                    thRequest("{{ route('servers.cancel', '') }}" + '/' + serverId, 'PATCH');
+                }
+            });
+        };
+
+        const handleServerDelete = (serverId) => {
+            thConfirm({
+                title: "{{ __('Delete Server?') }}",
+                html: "{!! __('This is an irreversible action, all files of this server will be removed. <strong>No funds will get refunded</strong>. We recommend deleting the server when server is suspended.') !!}",
+                confirmButtonText: "{{ __('Yes, delete it!') }}",
+            }).then((result) => {
+                if (result.value) {
+                    thRequest("{{ route('servers.destroy', '') }}" + '/' + serverId, 'DELETE');
+                }
+            });
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            $('[data-toggle="popover"]').popover();
+            $('[data-toggle="tooltip"]').tooltip();
+        });
+    </script>
+@endsection

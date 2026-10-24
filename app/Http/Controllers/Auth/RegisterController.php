@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Providers\RouteServiceProvider;
 use App\Traits\Referral;
 use App\Settings\PterodactylSettings;
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Helpers\CurrencyHelper;
 use App\Settings\GeneralSettings;
 use App\Settings\ReferralSettings;
@@ -56,12 +56,12 @@ class RegisterController extends Controller
         protected WebsiteSettings $websiteSettings,
         protected UserSettings $userSettings,
         protected ReferralSettings $referralSettings,
-        protected PterodactylClient $pterodactylClient,
+        protected GamePanelClient $pterodactylClient,
         private ProcessReferralAction $processReferralAction,
     ) {
         $this->middleware('guest');
         $this->pterodactylSettings = $pterodactylSettings;
-        $this->pterodactylClient = new PterodactylClient($pterodactylSettings);
+        $this->pterodactylClient = app(GamePanelClient::class);
         $this->currencyHelper = $currencyHelper;
         $this->generalSettings = $generalSettings;
         $this->websiteSettings = $websiteSettings;

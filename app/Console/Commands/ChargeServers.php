@@ -61,6 +61,18 @@ class ChargeServers extends Command
                     /** @var User $user */
                     $user = $server->user;
 
+                    // Directly paid servers are not charged from credits. They
+                    // run until their paid period ends, plus the plan's grace
+                    // days, and are suspended after that.
+                    if ($server->isDirectBilled()) {
+                        if ($server->isOverdue()) {
+                            $this->line("<fg=yellow>{$server->name}</> payment overdue, suspending");
+                            $this->suspendFunc($server, $user);
+                        }
+
+                        continue;
+                    }
+
                     $billing_period = $product->billing_period;
 
                     // check if server is due to be charged by comparing its last_billed date with the current date and the billing period

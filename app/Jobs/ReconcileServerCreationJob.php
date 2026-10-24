@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Models\Server;
 use App\Services\CreditService;
 use Illuminate\Bus\Queueable;
@@ -27,7 +27,7 @@ class ReconcileServerCreationJob implements ShouldQueue
         $this->queue = 'default';
     }
 
-    public function handle(PterodactylClient $pterodactylClient, CreditService $creditService): void
+    public function handle(GamePanelClient $pterodactylClient, CreditService $creditService): void
     {
         $server = Server::find($this->serverId);
 
@@ -105,7 +105,7 @@ class ReconcileServerCreationJob implements ShouldQueue
             return;
         }
 
-        $pterodactylClient = app(PterodactylClient::class);
+        $pterodactylClient = app(GamePanelClient::class);
         $creditService = app(CreditService::class);
 
         try {

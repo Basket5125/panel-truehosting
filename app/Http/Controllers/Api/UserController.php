@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Classes\PterodactylClient;
+use App\Contracts\GamePanelClient;
 use App\Events\UserUpdateCreditsEvent;
 use App\Helpers\CurrencyHelper;
 use App\Http\Resources\UserResource;
@@ -39,7 +39,7 @@ class UserController extends Controller
 
     public function __construct(PterodactylSettings $ptero_settings, ReferralSettings $referralSettings, CurrencyHelper $currencyHelper)
     {
-        $this->pterodactyl = new PterodactylClient($ptero_settings);
+        $this->pterodactyl = app(GamePanelClient::class);
         $this->referralSettings = $referralSettings;
         $this->currencyHelper = $currencyHelper;
     }
@@ -107,7 +107,7 @@ class UserController extends Controller
                 'password' => isset($data['password']) ? $data['password'] : null,
             ]);
 
-            $response = $this->pterodactyl->application->patch('/application/users/' . $user->pterodactyl_id, $payload);
+            $response = $this->pterodactyl->updateUser($user->pterodactyl_id, $payload);
 
             if ($response->failed()) {
                 throw ValidationException::withMessages([
@@ -286,7 +286,7 @@ class UserController extends Controller
 
             $this->incrementReferralUserCredits($user, $data);
 
-            $response = $this->pterodactyl->application->post('/application/users', [
+            $response = $this->pterodactyl->createUser([
                 'external_id' => "0",
                 'username' => $data['name'],
                 'email' => $data['email'],

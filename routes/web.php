@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\AnalyticsController;
+use App\Http\Controllers\Admin\CustomPlanController;
+use App\Http\Controllers\CustomPlanOrderController;
 use App\Http\Controllers\Admin\ApplicationApiController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\LegalController;
@@ -62,8 +65,17 @@ Route::middleware(['auth', 'checkSuspended'])->group(function () {
     })->middleware(['auth', 'throttle:3,1'])->name('verification.send');
 
     //normal routes
+    //configurable plans
+    Route::get('plans', [CustomPlanOrderController::class, 'index'])->name('plans.index');
+    Route::get('plans/{customplan}', [CustomPlanOrderController::class, 'show'])->name('plans.show');
+    Route::post('plans/{customplan}/quote', [CustomPlanOrderController::class, 'quote'])->name('plans.quote');
+    Route::post('plans/{customplan}/order', [CustomPlanOrderController::class, 'order'])
+        ->middleware('throttle:10,1')->name('plans.order');
+
     Route::get('notifications/readAll', [NotificationController::class, 'readAll'])->name('notifications.readAll');
     Route::resource('notifications', NotificationController::class);
+    Route::post('/servers/{server}/renew', [\App\Http\Controllers\ServerRenewalController::class, 'renew'])
+        ->middleware('throttle:10,1')->name('servers.renew');
     Route::patch('/servers/cancel/{server}', [ServerController::class, 'cancel'])->name('servers.cancel');
     Route::post('/servers/validateDeploymentVariables', [ServerController::class, 'validateDeploymentVariables'])->name('servers.validateDeploymentVariables');
     Route::patch('/servers/{server}/billing_priority', [ServerController::class, 'updateBillingPriority'])->name('servers.updateBillingPriority');
@@ -135,6 +147,7 @@ Route::middleware(['auth', 'checkSuspended'])->group(function () {
         Route::get('users/loginas/{user}', [UserController::class, 'loginAs'])->name('users.loginas');
         Route::get('users/verifyEmail/{user}', [UserController::class, 'verifyEmail'])->name('users.verifyEmail');
         Route::get('users/datatable', [UserController::class, 'datatable'])->name('users.datatable');
+        Route::delete('users/bulk', [UserController::class, 'bulkDestroy'])->name('users.bulkDestroy');
         Route::get('users/notifications', [UserController::class, 'notifications'])->name('users.notifications.index');
         Route::post('users/notifications', [UserController::class, 'notify'])->name('users.notifications.notify');
         Route::post('users/togglesuspend/{user}', [UserController::class, 'toggleSuspended'])->name('users.togglesuspend');
@@ -159,6 +172,12 @@ Route::middleware(['auth', 'checkSuspended'])->group(function () {
         Route::resource('store', ShopProductController::class)->parameters([
             'store' => 'shopProduct',
         ]);
+
+        //analytics
+        Route::get('analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
+
+        //configurable plans
+        Route::resource('customplans', CustomPlanController::class)->except(['show']);
 
         //payments
         Route::get('payments/datatable', [PaymentController::class, 'datatable'])->name('payments.datatable');

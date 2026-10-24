@@ -2,6 +2,7 @@
 
 namespace App\Classes;
 
+use App\Contracts\GamePanelClient;
 use App\Models\Pterodactyl\Egg;
 use App\Models\Pterodactyl\Nest;
 use App\Models\Pterodactyl\Node;
@@ -16,13 +17,15 @@ use App\Settings\ServerSettings;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
-class PterodactylClient
+class PterodactylClient implements GamePanelClient
 {
     //TODO: Extend error handling (maybe logger for more errors when debugging)
 
     private int $per_page_limit = 200;
 
     private int $allocation_limit = 200;
+
+    private string $panel_url = '';
 
     public PendingRequest $client;
 
@@ -35,6 +38,7 @@ class PterodactylClient
         try {
             $this->client = $this->client($ptero_settings);
             $this->application = $this->clientAdmin($ptero_settings);
+            $this->panel_url = $ptero_settings->getUrl();
             $this->per_page_limit = $ptero_settings->per_page_limit;
             $this->allocation_limit = $server_settings->allocation_limit;
         } catch (Exception $exception) {
@@ -397,7 +401,7 @@ class PterodactylClient
     public function getServerAttributes(int $pterodactylId, bool $deleteOn404 = false)
     {
         try {
-            $response = $this->application->get("application/servers/{$pterodactylId}?include=egg,node,nest,location");
+            $response = $this->application->get("application/servers/{$pterodactylId}?include=egg,node,nest,location,allocations");
         } catch (Exception $e) {
             throw self::getException($e->getMessage());
         }
@@ -564,6 +568,57 @@ class PterodactylClient
         }
 
         return true;
+    }
+
+    public function getNodeCapacity($nodeId): ?array
+    {
+        $node = $this->getNode($nodeId);
+
+        if (!isset($node['allocated_resources'], $node['memory'], $node['disk'])) {
+            return null;
+        }
+
+        return [
+            'memory' => $node['memory'] * (($node['memory_overallocate'] ?? 0) + 100) / 100,
+            'disk' => $node['disk'] * (($node['disk_overallocate'] ?? 0) + 100) / 100,
+            'used_memory' => $node['allocated_resources']['memory'] ?? 0,
+            'used_disk' => $node['allocated_resources']['disk'] ?? 0,
+        ];
+    }
+
+    public function panelName(): string
+    {
+        return 'Pterodactyl';
+    }
+
+    public function panelUrl(): string
+    {
+        return rtrim($this->panel_url, '/');
+    }
+
+    /*
+     * These used to be performed by callers reaching into $client->application
+     * with hard-coded paths; they belong to the driver.
+     */
+
+    public function createUser(array $data)
+    {
+        return $this->application->post('/application/users', $data);
+    }
+
+    public function deleteUser(int $panelUserId)
+    {
+        return $this->application->delete("/application/users/{$panelUserId}");
+    }
+
+    public function deleteServer(int $panelServerId)
+    {
+        return $this->application->delete("/application/servers/{$panelServerId}");
+    }
+
+    public function getServerById(int $panelServerId)
+    {
+        return $this->application->get("/application/servers/{$panelServerId}");
     }
 
     private function getEnvironmentVariables(Egg $egg, $variables)
