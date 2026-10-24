@@ -829,5 +829,7 @@
     "Direct payments are charged from the currency column of the price list. After the paid period ends, the server keeps running for the grace days, then it is suspended.": "Płatność bezpośrednia liczona jest z kolumny walutowej cennika. Po końcu opłaconego okresu serwer działa jeszcze przez dni karencji, potem jest zawieszany.",
     "Basics": "Podstawy",
     "Defines the priority for server billing. If not provided, the value of selected product will be used.": "Określa priorytet rozliczania serwera. Jeśli nie wybierzesz, użyta zostanie wartość z pakietu.",
-    "Pay with": "Płatność przez"
+    "Pay with": "Płatność przez",
+    "Large order above (% CPU)": "Duże zamówienie powyżej (% CPU)",
+    "Above either of these, only nodes ticked as \"takes large orders\" are used. 100% is one vCore.": "Powyżej którejkolwiek z tych wartości użyte zostaną tylko węzły zaznaczone jako przyjmujące duże zamówienia. 100% to jeden rdzeń."
 }

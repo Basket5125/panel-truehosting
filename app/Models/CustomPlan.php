@@ -247,12 +247,21 @@ class CustomPlan extends Model
      * Whether a configuration counts as a large order, which may only go on
      * nodes the admin flagged for it.
      *
+     * Memory and vCPU are weighed separately and either one is enough: a
+     * 2 GB server on eight cores is as much of a problem for a small node as
+     * a 32 GB one on a single core.
+     *
      * @param  array<string, int>  $resources
      */
     public function isLargeOrder(array $resources): bool
     {
-        return $this->large_order_memory !== null
-            && ($resources['memory'] ?? 0) > (int) $this->large_order_memory;
+        if ($this->large_order_memory !== null
+            && ($resources['memory'] ?? 0) > (int) $this->large_order_memory) {
+            return true;
+        }
+
+        return $this->large_order_cpu !== null
+            && ($resources['cpu'] ?? 0) > (int) $this->large_order_cpu;
     }
 
     /**

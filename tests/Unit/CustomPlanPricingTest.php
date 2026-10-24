@@ -263,10 +263,29 @@ class CustomPlanPricingTest extends TestCase
         $this->assertTrue($plan->isLargeOrder(['memory' => 12288]));
     }
 
+    public function test_vcpu_alone_can_make_an_order_large(): void
+    {
+        // Eight cores on 2 GB is as much of a problem for a small node as a
+        // 32 GB server on one core, so either threshold is enough.
+        $plan = $this->plan(['large_order_memory' => 8192, 'large_order_cpu' => 400]);
+
+        $this->assertFalse($plan->isLargeOrder(['memory' => 2048, 'cpu' => 400]));
+        $this->assertTrue($plan->isLargeOrder(['memory' => 2048, 'cpu' => 600]));
+        $this->assertTrue($plan->isLargeOrder(['memory' => 12288, 'cpu' => 100]));
+    }
+
+    public function test_a_cpu_threshold_works_without_a_memory_one(): void
+    {
+        $plan = $this->plan(['large_order_memory' => null, 'large_order_cpu' => 200]);
+
+        $this->assertFalse($plan->isLargeOrder(['memory' => 999999, 'cpu' => 200]));
+        $this->assertTrue($plan->isLargeOrder(['memory' => 1024, 'cpu' => 300]));
+    }
+
     public function test_no_threshold_means_no_large_orders(): void
     {
-        $plan = $this->plan(['large_order_memory' => null]);
+        $plan = $this->plan(['large_order_memory' => null, 'large_order_cpu' => null]);
 
-        $this->assertFalse($plan->isLargeOrder(['memory' => 999999]));
+        $this->assertFalse($plan->isLargeOrder(['memory' => 999999, 'cpu' => 999999]));
     }
 }

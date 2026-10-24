@@ -229,17 +229,31 @@
                         <h3 class="th-card-title">{{ __('Where it is deployed') }}</h3>
                     </div>
                     <div class="th-card-body">
-                        <div class="th-field">
-                            <label class="th-label" for="large_order_memory">
-                                {{ __('Large order above (MB RAM)') }}
-                            </label>
-                            <input id="large_order_memory" class="form-control" type="number" min="1"
-                                   name="large_order_memory" value="{{ $val('large_order_memory') }}"
-                                   placeholder="{{ __('empty = no limit') }}">
-                            <small class="text-muted">
-                                {{ __('Above this, only nodes ticked as "takes large orders" are used.') }}
-                            </small>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="th-field">
+                                    <label class="th-label" for="large_order_memory">
+                                        {{ __('Large order above (MB RAM)') }}
+                                    </label>
+                                    <input id="large_order_memory" class="form-control" type="number" min="1"
+                                           name="large_order_memory" value="{{ $val('large_order_memory') }}"
+                                           placeholder="{{ __('empty = no limit') }}">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="th-field">
+                                    <label class="th-label" for="large_order_cpu">
+                                        {{ __('Large order above (% CPU)') }}
+                                    </label>
+                                    <input id="large_order_cpu" class="form-control" type="number" min="1"
+                                           name="large_order_cpu" value="{{ $val('large_order_cpu') }}"
+                                           placeholder="{{ __('empty = no limit') }}">
+                                </div>
+                            </div>
                         </div>
+                        <small class="text-muted d-block mb-3">
+                            {{ __('Above either of these, only nodes ticked as "takes large orders" are used. 100% is one vCore.') }}
+                        </small>
 
                         <table class="table">
                             <thead>

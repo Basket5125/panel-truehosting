@@ -180,7 +180,8 @@
             const fields = @json($fields);
             const discountPerUnit = {{ (float) $plan->discount_per_unit }};
             const discountMax = {{ (float) $plan->discount_max }};
-            const largeThreshold = {{ $plan->large_order_memory !== null ? (int) $plan->large_order_memory : 'null' }};
+            const largeMemory = {{ $plan->large_order_memory !== null ? (int) $plan->large_order_memory : 'null' }};
+            const largeCpu = {{ $plan->large_order_cpu !== null ? (int) $plan->large_order_cpu : 'null' }};
             const locale = '{{ str_replace('_', '-', app()->getLocale()) }}';
             const currency = '{{ $plan->currency_code }}';
             const creditsName = @json($credits_display_name);
@@ -278,7 +279,10 @@
                     this.lines = active.lines;
                     this.total = active.total;
 
-                    this.largeOrder = largeThreshold !== null && (this.res.memory ?? 0) > largeThreshold;
+                    // Mirrors CustomPlan::isLargeOrder(): either threshold is enough.
+                    this.largeOrder =
+                        (largeMemory !== null && (this.res.memory ?? 0) > largeMemory)
+                        || (largeCpu !== null && (this.res.cpu ?? 0) > largeCpu);
                 },
             };
         }

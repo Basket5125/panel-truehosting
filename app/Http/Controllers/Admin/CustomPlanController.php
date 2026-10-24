@@ -130,6 +130,7 @@ class CustomPlanController extends Controller
             'discount_per_unit' => 'required|numeric|min:0|max:100',
             'discount_max' => 'required|numeric|min:0|max:100',
             'large_order_memory' => 'nullable|integer|min:1',
+            'large_order_cpu' => 'nullable|integer|min:1',
 
             'payment_modes' => 'required|in:credits,direct,both',
             'credit_rate' => 'nullable|numeric|min:0',
