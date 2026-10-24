@@ -557,6 +557,15 @@
         });
     })();
 
+    // Modals are written inline, deep inside the page. Any ancestor that forms a
+    // stacking context would leave them painted under the backdrop and dead to
+    // clicks, so each one is hoisted to the body the first time it opens.
+    $(document).on('show.bs.modal', '.modal', function () {
+        if (this.parentElement !== document.body) {
+            document.body.appendChild(this);
+        }
+    });
+
     $(document).ready(function () {
         $('[data-toggle="popover"]').popover();
 

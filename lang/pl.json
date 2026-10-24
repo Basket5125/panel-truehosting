@@ -814,5 +814,12 @@
     "weekly": "tygodniowo",
     "without limits": "bez limitów",
     "your@email.com": "twoj@email.pl",
-    "zh": "Chinese"
+    "zh": "Chinese",
+    "Choose the software, a location and the package. Setup starts right after that.": "Wybierz oprogramowanie, lokalizację i pakiet. Zaraz po tym ruszy instalacja.",
+    "Packages show up here": "Tu pojawią się pakiety",
+    "Fill in the configuration on the left — the packages available in that location will be listed here.": "Uzupełnij konfigurację po lewej — pakiety dostępne w tej lokalizacji wylistują się tutaj.",
+    "Loading": "Wczytywanie",
+    "No limit": "Bez limitu",
+    "Additional allocations (ports)": "Dodatkowe porty",
+    "Unlimited": "Bez limitu"
 }

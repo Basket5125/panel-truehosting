@@ -2923,8 +2923,11 @@ body.th-body .th-display {
     to   { opacity: 1; }
 }
 
+/* `backwards` and not `both`: a filling animation on opacity keeps the element
+   a stacking context for good, which would bury every Bootstrap modal under the
+   body-level backdrop. */
 .th-content {
-    animation: th-page-in 0.16s ease-out both;
+    animation: th-page-in 0.16s ease-out backwards;
 }
 
 /* Dim the outgoing page while the next one is still loading, so a slow
@@ -3139,4 +3142,151 @@ body.th-body .th-display {
 .th-renew .th-btn {
     width: 100%;
     justify-content: center;
+}
+
+/* ==========================================================================
+   Create server
+   Configuration on the left, the packages for that location beside it. The
+   two halves share one grid so they always line up along the top edge.
+   ========================================================================== */
+
+.th-create {
+    display: grid;
+    grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+    align-items: start;
+    gap: 1.1rem;
+}
+
+.th-create-config {
+    position: sticky;
+    top: calc(var(--topbar-h, 64px) + 1rem);
+}
+
+.th-create-config .th-card-body {
+    position: relative;
+}
+
+.th-create-config .form-group label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.th-create-config .form-group label .fa-info-circle {
+    margin-left: 0.3rem;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.th-create-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(18, 18, 26, 0.72);
+    color: var(--text-secondary);
+    font-size: 1.4rem;
+}
+
+/* The placeholder has to fill the column, otherwise it collapses to a strip
+   next to a tall configuration card. */
+.th-create-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 320px;
+    margin: 0;
+}
+
+.th-plan-slots {
+    flex: 0 0 auto;
+    padding: 0.18rem 0.5rem;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.th-plan-specs {
+    margin: 0.4rem 0 0;
+    padding: 0.8rem 0 0;
+    border-top: 1px solid var(--glass-border);
+    list-style: none;
+    font-size: 0.82rem;
+}
+
+.th-plan-specs li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.22rem 0;
+    color: var(--text-secondary);
+}
+
+.th-plan-specs li > span:first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--text-muted);
+}
+
+.th-plan-specs li > span:first-child i {
+    width: 0.95rem;
+    text-align: center;
+    font-size: 0.75rem;
+}
+
+.th-plan-specs li > span:last-child {
+    text-align: right;
+    font-weight: 600;
+}
+
+/* Both actions are full width here, unlike the server card where they sit
+   on one row. */
+.th-create-products .th-card-foot {
+    flex-direction: column;
+}
+
+.th-create-products .th-card-foot .th-btn,
+.th-create-products .th-card-foot .th-btn:first-child {
+    flex: 0 0 auto;
+    width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+/* The figure is the first thing read here, but it shares the line with the
+   period, so it is a notch smaller than on the pricing page. */
+.th-create-products .th-plan-price {
+    flex-wrap: wrap;
+    margin-bottom: 0.45rem;
+}
+
+.th-create-products .th-plan-amount {
+    font-size: 1.75rem;
+}
+
+.th-create-products .th-plan {
+    padding: 1.3rem 1.2rem;
+}
+
+.th-create-products .th-grid {
+    grid-template-columns: repeat(auto-fill, minmax(276px, 1fr));
+}
+
+@media (max-width: 1199.98px) {
+    .th-create {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .th-create-config {
+        position: static;
+    }
+
+    .th-create-hint {
+        min-height: 200px;
+    }
 }
