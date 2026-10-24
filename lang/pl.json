@@ -851,5 +851,6 @@
     "The server is busy — it may still be installing, or suspended on the game panel.": "Serwer jest zajęty — może jeszcze się instalować albo być zawieszony w panelu gier.",
     "The game panel cannot find this server for the configured client key.": "Panel gier nie widzi tego serwera dla ustawionego klucza klienckiego.",
     "The game panel refused: the client key may not control this server.": "Panel gier odmówił: klucz kliencki nie ma uprawnień do tego serwera.",
-    "The game panel rejected the client key.": "Panel gier odrzucił klucz kliencki."
+    "The game panel rejected the client key.": "Panel gier odrzucił klucz kliencki.",
+    "Power controls are turned off.": "Sterowanie zasilaniem jest wyłączone."
 }

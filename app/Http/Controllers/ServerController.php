@@ -77,6 +77,7 @@ class ServerController extends Controller
 
         return view('servers.index')->with([
             'servers' => $servers,
+            'power_controls_enabled' => $this->serverSettings->power_controls_enabled,
             'credits_display_name' => $this->generalSettings->credits_display_name,
             'pterodactyl_url' => $this->pteroSettings->panel_url,
             'phpmyadmin_url' => $this->generalSettings->phpmyadmin_url
@@ -124,6 +125,12 @@ class ServerController extends Controller
         $request->validate([
             'signal' => 'required|in:start,stop,restart,kill',
         ]);
+
+        if (!$this->serverSettings->power_controls_enabled) {
+            return response()->json([
+                'error' => __('Power controls are turned off.'),
+            ], 403);
+        }
 
         if (!$server->canBePowered()) {
             return response()->json([

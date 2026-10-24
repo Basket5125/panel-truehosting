@@ -9,6 +9,7 @@ class ServerSettings extends Settings
     public bool $creation_enabled = false;
     public bool $enable_upgrade = false;
     public bool $location_description_enabled = false;
+    public bool $power_controls_enabled = false;
     public int $allocation_limit = 0;
 
     public static function group(): string
@@ -27,6 +28,7 @@ class ServerSettings extends Settings
             'enable_upgrade' => 'nullable|string',
             'allocation_limit' => 'required|integer|min:0',
             'location_description_enabled' => 'nullable|string',
+            'power_controls_enabled' => 'nullable|string',
         ];
     }
 
@@ -59,6 +61,11 @@ class ServerSettings extends Settings
                 'label' => 'Enable Location Description',
                 'type' => 'boolean',
                 'description' => 'Enable the location description field on the server creation page.',
+            ],
+            'power_controls_enabled' => [
+                'label' => 'Power Controls Enabled',
+                'type' => 'boolean',
+                'description' => 'Show start, stop and restart buttons on the server list. These go through the game panel\'s client API, so the configured client key has to be allowed to control customer servers.',
             ],
         ];
     }

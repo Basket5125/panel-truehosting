@@ -200,7 +200,7 @@
                             </div>
                         @endif
 
-                        @if ($server->canBePowered())
+                        @if ($power_controls_enabled && $server->canBePowered())
                             <div class="th-power">
                                 <button type="button" class="th-btn th-btn-ghost th-btn-sm"
                                         :disabled="busy('{{ $server->id }}')"
