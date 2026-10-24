@@ -134,22 +134,38 @@ class ServerController extends Controller
         try {
             $response = $this->pterodactyl->powerAction($server, $request->input('signal'));
         } catch (Exception $e) {
-            Log::error('Power action failed', [
+            Log::error('Power action threw', [
                 'server_id' => $server->id,
                 'signal' => $request->input('signal'),
+                'panel' => $this->pterodactyl->panelName(),
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json(['error' => __('The game panel did not accept that.')], 502);
+            return response()->json([
+                'error' => $this->powerFailureMessage(null, $e->getMessage()),
+            ], 502);
         }
 
         if ($response->failed()) {
-            // A panel still installing the server answers with a conflict.
-            $message = $response->status() === 409
-                ? __('The server is busy. Try again in a moment.')
-                : __('The game panel did not accept that.');
+            // The panel's own wording is the only thing that says what went
+            // wrong, so it is kept rather than flattened into one sentence.
+            $detail = $response->json('errors.0.detail')
+                ?? $response->json('message')
+                ?? $response->json('error')
+                ?? '';
 
-            return response()->json(['error' => $message], 502);
+            Log::warning('Power action refused by the game panel', [
+                'server_id' => $server->id,
+                'identifier' => $server->identifier,
+                'signal' => $request->input('signal'),
+                'panel' => $this->pterodactyl->panelName(),
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return response()->json([
+                'error' => $this->powerFailureMessage($response->status(), $detail),
+            ], 502);
         }
 
         // The panel reports the transition, not the end state, so the list is
@@ -163,6 +179,30 @@ class ServerController extends Controller
         $server->state = $expected;
 
         return response()->json($server->powerStateInfo() + ['can_power' => true]);
+    }
+
+    /**
+     * Turn a refusal from the game panel into something the reader can act on.
+     *
+     * A customer gets the plain reason; an administrator also gets the status
+     * and the panel's own text, because that is what identifies a misconfigured
+     * key without going through the log file.
+     */
+    private function powerFailureMessage(?int $status, string $detail): string
+    {
+        $message = match ($status) {
+            409 => __('The server is busy — it may still be installing, or suspended on the game panel.'),
+            404 => __('The game panel cannot find this server for the configured client key.'),
+            403 => __('The game panel refused: the client key may not control this server.'),
+            401 => __('The game panel rejected the client key.'),
+            default => __('The game panel did not accept that.'),
+        };
+
+        if (Auth::user()?->hasRole('Admin') && ($status !== null || $detail !== '')) {
+            $message .= ' [' . trim(($status !== null ? 'HTTP ' . $status : '') . ' ' . $detail) . ']';
+        }
+
+        return $message;
     }
 
     public function create(): \Illuminate\View\View|RedirectResponse

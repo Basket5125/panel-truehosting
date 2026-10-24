@@ -847,5 +847,9 @@
     "Stop": "Stop",
     "This server cannot be controlled right now.": "Tym serwerem nie można teraz sterować.",
     "The game panel did not accept that.": "Panel gier nie przyjął tego polecenia.",
-    "The server is busy. Try again in a moment.": "Serwer jest zajęty. Spróbuj za chwilę."
+    "The server is busy. Try again in a moment.": "Serwer jest zajęty. Spróbuj za chwilę.",
+    "The server is busy — it may still be installing, or suspended on the game panel.": "Serwer jest zajęty — może jeszcze się instalować albo być zawieszony w panelu gier.",
+    "The game panel cannot find this server for the configured client key.": "Panel gier nie widzi tego serwera dla ustawionego klucza klienckiego.",
+    "The game panel refused: the client key may not control this server.": "Panel gier odmówił: klucz kliencki nie ma uprawnień do tego serwera.",
+    "The game panel rejected the client key.": "Panel gier odrzucił klucz kliencki."
 }
