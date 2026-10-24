@@ -76,6 +76,12 @@ Route::middleware(['auth', 'checkSuspended'])->group(function () {
     Route::resource('notifications', NotificationController::class);
     Route::post('/servers/{server}/renew', [\App\Http\Controllers\ServerRenewalController::class, 'renew'])
         ->middleware('throttle:10,1')->name('servers.renew');
+    // Declared before the resource routes, so `servers/states` is not read as
+    // a server id.
+    Route::get('/servers/states', [ServerController::class, 'states'])
+        ->middleware('throttle:120,1')->name('servers.states');
+    Route::post('/servers/{server}/power', [ServerController::class, 'power'])
+        ->middleware('throttle:30,1')->name('servers.power');
     Route::patch('/servers/cancel/{server}', [ServerController::class, 'cancel'])->name('servers.cancel');
     Route::post('/servers/validateDeploymentVariables', [ServerController::class, 'validateDeploymentVariables'])->name('servers.validateDeploymentVariables');
     Route::patch('/servers/{server}/billing_priority', [ServerController::class, 'updateBillingPriority'])->name('servers.updateBillingPriority');

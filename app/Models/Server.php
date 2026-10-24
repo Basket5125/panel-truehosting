@@ -195,6 +195,41 @@ class Server extends Model
     }
 
     /**
+     * How the server's power state should be shown.
+     *
+     * Kept here rather than in the view because the servers list renders it
+     * once on the server and then keeps it up to date over JSON; both have to
+     * agree on the wording and the colour.
+     *
+     * @return array{key: string, class: string, label: string}
+     */
+    public function powerStateInfo(): array
+    {
+        $state = strtolower((string) ($this->state ?? ''));
+
+        // Billing state wins over whatever the game panel reports.
+        return match (true) {
+            (bool) $this->suspended => ['key' => 'suspended', 'class' => 'is-suspended', 'label' => __('Suspended')],
+            (bool) $this->canceled => ['key' => 'canceled', 'class' => 'is-pending', 'label' => __('Canceled')],
+            $state === 'running' => ['key' => 'running', 'class' => 'is-online', 'label' => __('Running')],
+            in_array($state, ['starting', 'installing', 'restarting'], true)
+                => ['key' => 'starting', 'class' => 'is-pending', 'label' => __('Starting')],
+            $state === 'stopping' => ['key' => 'stopping', 'class' => 'is-pending', 'label' => __('Stopping')],
+            in_array($state, ['offline', 'stopped'], true) => ['key' => 'offline', 'class' => '', 'label' => __('Offline')],
+            default => ['key' => 'unknown', 'class' => 'is-online', 'label' => __('Active')],
+        };
+    }
+
+    /** Whether the customer may send this server a power signal. */
+    public function canBePowered(): bool
+    {
+        return !$this->suspended
+            && !$this->canceled
+            && $this->status === self::STATUS_ACTIVE
+            && !empty($this->identifier);
+    }
+
+    /**
      * The node this server was deployed on. Null on rows created before the
      * column existed, until `cp:servers:syncnodes` fills them in.
      *

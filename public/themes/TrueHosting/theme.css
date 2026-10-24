@@ -3709,3 +3709,32 @@ body.th-body .th-display {
 .th-body a.th-toggle.is-on i {
     color: var(--brand-light);
 }
+
+/* Power controls on a server card. */
+.th-power {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--glass-border);
+}
+
+.th-power .th-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    gap: 0.4rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+}
+
+.th-power .th-btn i {
+    font-size: 0.72rem;
+}
+
+/* The pill animates between states, so the change is noticed without
+   anything jumping around. */
+.th-status {
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}

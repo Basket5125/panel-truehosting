@@ -841,5 +841,11 @@
     "Leaves out accounts holding a role with power :power or above.": "Pomija konta z rolą o mocy :power lub wyższej.",
     "Earnings per node": "Zarobek z węzła",
     "Node not recorded": "Węzeł nieznany",
-    "Enter a name for the server": "Wpisz nazwę serwera"
+    "Enter a name for the server": "Wpisz nazwę serwera",
+    "Start": "Start",
+    "Restart": "Restart",
+    "Stop": "Stop",
+    "This server cannot be controlled right now.": "Tym serwerem nie można teraz sterować.",
+    "The game panel did not accept that.": "Panel gier nie przyjął tego polecenia.",
+    "The server is busy. Try again in a moment.": "Serwer jest zajęty. Spróbuj za chwilę."
 }

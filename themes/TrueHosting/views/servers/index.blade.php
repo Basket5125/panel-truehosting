@@ -45,7 +45,7 @@
             </a>
         </div>
     @else
-        <div class="th-grid">
+        <div class="th-grid" x-data="serverPower()" x-init="start()">
             @foreach ($servers as $server)
                 @php
                         $product = $server->product;
@@ -89,19 +89,11 @@
                             </div>
 
                             @php
-                                // Billing state wins over the panel's power state.
-                                $state = strtolower((string) ($server->state ?? ''));
-                                [$stateClass, $stateLabel] = match (true) {
-                                    (bool) $server->suspended => ['is-suspended', __('Suspended')],
-                                    (bool) $server->canceled => ['is-pending', __('Canceled')],
-                                    $state === 'running' => ['is-online', __('Running')],
-                                    in_array($state, ['starting', 'installing', 'restarting'], true) => ['is-pending', __('Starting')],
-                                    in_array($state, ['stopping'], true) => ['is-pending', __('Stopping')],
-                                    in_array($state, ['offline', 'stopped'], true) => ['', __('Offline')],
-                                    default => ['is-online', __('Active')],
-                                };
+                                $stateInfo = $server->powerStateInfo();
                             @endphp
-                            <span class="th-status {{ $stateClass }}">{{ $stateLabel }}</span>
+                            <span class="th-status {{ $stateInfo['class'] }}"
+                                  :class="'th-status ' + cls('{{ $server->id }}')"
+                                  x-text="label('{{ $server->id }}')">{{ $stateInfo['label'] }}</span>
                         </div>
 
                         @if (!empty($server->address))
@@ -208,6 +200,29 @@
                             </div>
                         @endif
 
+                        @if ($server->canBePowered())
+                            <div class="th-power">
+                                <button type="button" class="th-btn th-btn-ghost th-btn-sm"
+                                        :disabled="busy('{{ $server->id }}')"
+                                        @click="send('{{ $server->id }}', 'start')"
+                                        title="{{ __('Start') }}">
+                                    <i class="fas fa-play"></i>{{ __('Start') }}
+                                </button>
+                                <button type="button" class="th-btn th-btn-ghost th-btn-sm"
+                                        :disabled="busy('{{ $server->id }}')"
+                                        @click="send('{{ $server->id }}', 'restart')"
+                                        title="{{ __('Restart') }}">
+                                    <i class="fas fa-redo"></i>{{ __('Restart') }}
+                                </button>
+                                <button type="button" class="th-btn th-btn-ghost th-btn-sm"
+                                        :disabled="busy('{{ $server->id }}')"
+                                        @click="send('{{ $server->id }}', 'stop')"
+                                        title="{{ __('Stop') }}">
+                                    <i class="fas fa-stop"></i>{{ __('Stop') }}
+                                </button>
+                            </div>
+                        @endif
+
                         <div class="th-card-foot">
                             <a href="{{ $pterodactyl_url }}/server/{{ $server->identifier }}" target="__blank"
                                class="th-btn th-btn-primary" style="flex:1 1 auto"
@@ -237,6 +252,78 @@
     @endif
 
     <script>
+        function serverPower() {
+            // How often the list asks the panel what each server is doing. Short
+            // enough to feel live, long enough not to hammer the game panel with
+            // one request per server per tick.
+            const INTERVAL = 8000;
+
+            return {
+                states: @json($servers->mapWithKeys(fn ($s) => [
+                    $s->id => $s->powerStateInfo() + ['can_power' => $s->canBePowered()],
+                ])),
+                pending: {},
+                timer: null,
+
+                start() {
+                    this.timer = setInterval(() => this.refresh(), INTERVAL);
+
+                    // A tab nobody is looking at does not need fresh figures,
+                    // and catches up the moment it comes back.
+                    document.addEventListener('visibilitychange', () => {
+                        if (!document.hidden) this.refresh();
+                    });
+                },
+
+                label(id) {
+                    return this.states[id]?.label ?? '';
+                },
+
+                cls(id) {
+                    return this.states[id]?.class ?? '';
+                },
+
+                busy(id) {
+                    return this.pending[id] === true;
+                },
+
+                async refresh() {
+                    if (document.hidden) return;
+
+                    try {
+                        const response = await axios.get('{{ route('servers.states') }}');
+                        // A server mid-signal keeps the state the click set until
+                        // its request comes back, so the pill does not flicker.
+                        Object.keys(response.data).forEach(id => {
+                            if (!this.busy(id)) this.states[id] = response.data[id];
+                        });
+                    } catch (e) {
+                        // A dropped poll is not worth telling anyone about.
+                    }
+                },
+
+                async send(id, signal) {
+                    if (this.busy(id)) return;
+
+                    this.pending[id] = true;
+
+                    try {
+                        const response = await axios.post(
+                            '{{ url('servers') }}/' + id + '/power', { signal: signal }
+                        );
+                        this.states[id] = response.data;
+                    } catch (e) {
+                        thToast('error', e.response?.data?.error
+                            ?? '{{ __('The game panel did not accept that.') }}');
+                    } finally {
+                        this.pending[id] = false;
+                        // Confirm the real state once the panel has had a moment.
+                        setTimeout(() => this.refresh(), 2500);
+                    }
+                },
+            };
+        }
+
         function thCopyAddress(id) {
             const el = document.getElementById('addr-' + id);
             if (!el) return;

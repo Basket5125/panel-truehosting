@@ -83,6 +83,88 @@ class ServerController extends Controller
         ]);
     }
 
+    /**
+     * Live power state for each of the caller's servers, polled by the list.
+     *
+     * One unreachable server must not blank out the rest, so each lookup is
+     * caught on its own and simply reports nothing new.
+     */
+    public function states(): \Illuminate\Http\JsonResponse
+    {
+        $out = [];
+
+        foreach (Auth::user()->servers as $server) {
+            // A suspended or cancelled server has a state of its own that the
+            // game panel knows nothing about; no call needed.
+            if ($server->canBePowered()) {
+                try {
+                    $info = $this->pterodactyl->getServerAttributes($server->pterodactyl_id);
+                    $server->state = $info['status'] ?? null;
+                } catch (Exception $e) {
+                    // Leave the state unknown rather than reporting it wrong.
+                    $server->state = null;
+                }
+            }
+
+            $out[$server->id] = $server->powerStateInfo() + ['can_power' => $server->canBePowered()];
+        }
+
+        return response()->json($out);
+    }
+
+    /**
+     * Start, stop or restart a server from inside the billing panel.
+     */
+    public function power(Server $server, Request $request): \Illuminate\Http\JsonResponse
+    {
+        if ($server->user_id !== Auth::id()) {
+            return response()->json(['error' => __('This is not your Server!')], 403);
+        }
+
+        $request->validate([
+            'signal' => 'required|in:start,stop,restart,kill',
+        ]);
+
+        if (!$server->canBePowered()) {
+            return response()->json([
+                'error' => __('This server cannot be controlled right now.'),
+            ], 422);
+        }
+
+        try {
+            $response = $this->pterodactyl->powerAction($server, $request->input('signal'));
+        } catch (Exception $e) {
+            Log::error('Power action failed', [
+                'server_id' => $server->id,
+                'signal' => $request->input('signal'),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['error' => __('The game panel did not accept that.')], 502);
+        }
+
+        if ($response->failed()) {
+            // A panel still installing the server answers with a conflict.
+            $message = $response->status() === 409
+                ? __('The server is busy. Try again in a moment.')
+                : __('The game panel did not accept that.');
+
+            return response()->json(['error' => $message], 502);
+        }
+
+        // The panel reports the transition, not the end state, so the list is
+        // told what to expect until the next poll confirms it.
+        $expected = match ($request->input('signal')) {
+            'start' => 'starting',
+            'restart' => 'restarting',
+            default => 'stopping',
+        };
+
+        $server->state = $expected;
+
+        return response()->json($server->powerStateInfo() + ['can_power' => true]);
+    }
+
     public function create(): \Illuminate\View\View|RedirectResponse
     {
         $this->checkPermission(self::CREATE_PERMISSION);
@@ -248,8 +330,22 @@ class ServerController extends Controller
         $servers = Auth::user()->servers;
 
         foreach ($servers as $server) {
-            $serverInfo = $this->pterodactyl->getServerAttributes($server->pterodactyl_id);
-            if (!$serverInfo) continue;
+            try {
+                $serverInfo = $this->pterodactyl->getServerAttributes($server->pterodactyl_id);
+            } catch (Exception $e) {
+                // One server the panel cannot answer for must not take the
+                // whole list down; it is listed with what is stored locally.
+                Log::warning('Could not read server from the game panel', [
+                    'server_id' => $server->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            if (!$serverInfo) {
+                continue;
+            }
 
             $this->updateServerInfo($server, $serverInfo);
         }
