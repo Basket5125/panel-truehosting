@@ -554,7 +554,12 @@
             leaving();
         }, true);
 
-        document.addEventListener('submit', leaving, true);
+        // Bubble phase, and only when nothing cancelled the submit: a form
+        // that blocks itself to point out a missing field is not navigating,
+        // so the page must not dim as though it were.
+        document.addEventListener('submit', function (e) {
+            if (!e.defaultPrevented) leaving();
+        });
 
         // Returning through the back/forward cache must not leave it dimmed.
         window.addEventListener('pageshow', function () {

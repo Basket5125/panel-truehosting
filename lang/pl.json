@@ -840,5 +840,6 @@
     "Without staff": "Bez kadry",
     "Leaves out accounts holding a role with power :power or above.": "Pomija konta z rolą o mocy :power lub wyższej.",
     "Earnings per node": "Zarobek z węzła",
-    "Node not recorded": "Węzeł nieznany"
+    "Node not recorded": "Węzeł nieznany",
+    "Enter a name for the server": "Wpisz nazwę serwera"
 }

@@ -35,5 +35,11 @@ class PostServerCreationJob implements ShouldQueue
         }
 
         event(new ServerCreatedEvent($server->user, $server));
+
+        // Hand the customer a running server instead of a switched-off one.
+        // Every path that ends with an active server comes through here, so
+        // this is the one place the start has to be asked for.
+        dispatch((new StartServerJob($server->id))
+            ->delay(now()->addSeconds(StartServerJob::DELAY_SECONDS)));
     }
 }

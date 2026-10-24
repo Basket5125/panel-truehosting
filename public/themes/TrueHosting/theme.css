@@ -3476,6 +3476,13 @@ body.th-body .th-display {
     padding: 1.6rem 1.5rem 1.35rem;
 }
 
+/* Spacing around the icon only. Its size, ring and the lines that draw the
+   tick and the cross are SweetAlert's own geometry and must stay untouched. */
+.th-body .swal2-icon {
+    margin-top: 0.2rem;
+    margin-bottom: 0.9rem;
+}
+
 .th-body .swal2-title {
     font-family: "Montserrat", sans-serif;
     font-size: 1.12rem;
@@ -3535,23 +3542,6 @@ body.th-body .th-display {
     color: var(--text-primary);
 }
 
-/* The icon ring is drawn in its own colour; only the muted ones need help. */
-.th-body .swal2-icon.swal2-info,
-.th-body .swal2-icon.swal2-question {
-    border-color: rgba(59, 127, 250, 0.5);
-    color: var(--brand-light);
-}
-
-.th-body .swal2-icon {
-    margin: 0.2rem auto 0.9rem;
-    width: 3.4rem;
-    height: 3.4rem;
-}
-
-.th-body .swal2-icon .swal2-icon-content {
-    font-size: 2.1rem;
-}
-
 .th-body .swal2-input,
 .th-body .swal2-select,
 .th-body .swal2-textarea {
@@ -3588,47 +3578,32 @@ body.th-body .th-display {
    is restated here because SweetAlert injects its own `.swal2-popup.swal2-toast`
    rule into the head at runtime, which ties on specificity and lands later. */
 .th-body .swal2-popup.swal2-toast {
-    background: var(--glass-strong);
+    /* The card surface, not the lighter one used for dialogs: a toast sits on
+       top of the page rather than over a dimmed backdrop, so the lighter grey
+       read as a slab stuck to the corner. */
+    background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-card);
     color: var(--text-primary);
     padding: 0.7rem 0.9rem;
     box-shadow: var(--shadow-lg);
+    /* Keeps the timer bar inside the rounded corners. */
+    overflow: hidden;
+}
+
+/* The bar is flush with the bottom edge, so it has to follow the corners
+   rather than square them off. */
+.th-body .swal2-popup.swal2-toast .swal2-timer-progress-bar-container {
+    height: 3px;
+    border-bottom-left-radius: var(--radius-card);
+    border-bottom-right-radius: var(--radius-card);
+    overflow: hidden;
 }
 
 .th-body .swal2-popup.swal2-toast .swal2-title {
     font-size: 0.88rem;
     font-weight: 600;
     margin: 0;
-}
-
-.th-body .swal2-popup.swal2-toast .swal2-icon {
-    width: 1.5rem;
-    height: 1.5rem;
-    min-width: 1.5rem;
-    border-width: 2px;
-    margin: 0 0.6rem 0 0;
-}
-
-.th-body .swal2-popup.swal2-toast .swal2-icon .swal2-icon-content {
-    font-size: 1rem;
-}
-
-/* The ring animation draws these at the icon's full size. */
-.th-body .swal2-popup.swal2-toast .swal2-success-ring {
-    width: 1.5rem;
-    height: 1.5rem;
-    border-width: 2px;
-}
-
-.th-body .swal2-popup.swal2-toast .swal2-success-line-tip,
-.th-body .swal2-popup.swal2-toast .swal2-success-line-long {
-    height: 2px;
-}
-
-/* The timer bar rides the bottom edge, so the surface has to clip it. */
-.th-body .swal2-popup.swal2-toast {
-    overflow: hidden;
 }
 
 .th-body .swal2-timer-progress-bar {
@@ -3663,16 +3638,6 @@ body.th-body .th-display {
    than a decision, so nothing is orderable until it has been made one.
    ========================================================================== */
 
-.th-required-note {
-    margin: 0 0 1.1rem;
-    padding: 0.6rem 0.8rem;
-    border: 1px solid rgba(239, 68, 68, 0.35);
-    border-radius: var(--radius-sm);
-    background: rgba(239, 68, 68, 0.08);
-    color: #fca5a5;
-    font-size: 0.82rem;
-}
-
 .th-required {
     display: flex;
     align-items: flex-start;
@@ -3700,26 +3665,6 @@ body.th-body .th-display {
 .th-required ul {
     margin: 0;
     padding-left: 1.05rem;
-}
-
-/* An untouched slider is drawn in the same red, so the eye goes to the
-   control rather than only to the message. */
-.th-slider.is-untouched .th-range::-webkit-slider-thumb {
-    background: #ef4444;
-}
-
-.th-slider.is-untouched .th-range::-moz-range-thumb {
-    background: #ef4444;
-}
-
-/* The track is the input itself here, not a pseudo-element. */
-.th-slider.is-untouched .th-range {
-    background: rgba(239, 68, 68, 0.12);
-    border-color: rgba(239, 68, 68, 0.4);
-}
-
-.th-slider.is-untouched .th-slider-value {
-    color: #fca5a5;
 }
 
 .th-body .form-control.is-invalid,
