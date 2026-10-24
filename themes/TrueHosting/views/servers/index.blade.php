@@ -358,19 +358,40 @@
             cancelButtonText: "{{ __('No, abort!') }}",
         }, opts));
 
-        const thRequest = (url, method) => fetch(url, {
-            method: method,
-            headers: {'X-CSRF-TOKEN': '{{ csrf_token() }}'}
-        }).then(() => {
-            window.location.reload();
-        }).catch(() => {
-            Swal.fire({
-                title: "{{ __('Error') }}",
-                text: "{{ __('Something went wrong, please try again later.') }}",
-                icon: 'error',
-                confirmButtonColor: '#ef4444',
-            });
-        });
+        // `fetch` repeats a DELETE or PATCH when it follows a redirect, so these
+        // ask for JSON and read the answer instead of reloading blindly.
+        const thRequest = async (url, method) => {
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json',
+                    },
+                });
+
+                if (response.ok) {
+                    window.location.reload();
+                    return;
+                }
+
+                const body = await response.json().catch(() => ({}));
+
+                Swal.fire({
+                    title: "{{ __('Error') }}",
+                    text: body.error ?? "{{ __('Something went wrong, please try again later.') }}",
+                    icon: 'error',
+                    confirmButtonColor: '#ef4444',
+                });
+            } catch (e) {
+                Swal.fire({
+                    title: "{{ __('Error') }}",
+                    text: "{{ __('Something went wrong, please try again later.') }}",
+                    icon: 'error',
+                    confirmButtonColor: '#ef4444',
+                });
+            }
+        };
 
         const handleServerCancel = (serverId) => {
             thConfirm({

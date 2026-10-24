@@ -102,14 +102,33 @@ class Server extends Model
         });
 
         static::deleting(function (Server $server) {
-            $response = $server->pterodactyl->deleteServer($server->pterodactyl_id);
-            // A server that is already gone from the panel is not an error here;
-            // every other failure is. The status is checked rather than the body
-            // because each panel reports errors in its own shape.
-            if ($response && $response->failed() && !is_null($server->pterodactyl_id)) {
-                if ($response->status() !== 404) {
-                    throw new Exception('Could not delete the server on ' . $server->pterodactyl->panelName() . ' (HTTP ' . $response->status() . ')');
-                }
+            if (is_null($server->pterodactyl_id)) {
+                return;
+            }
+
+            $panelServerId = $server->pterodactyl_id;
+
+            // Deleting is one of the calls the two panels disagree about, so a
+            // refusal on the configured one is retried on the other.
+            $attempt = (new \App\Services\GamePanelFallback($server->pterodactyl))->attempt(
+                fn ($client) => $client->deleteServer($panelServerId),
+                'delete:' . $panelServerId
+            );
+
+            $response = $attempt['response'];
+
+            // A server that is already gone from the panel is not an error
+            // here; every other failure is. The status is checked rather than
+            // the body because each panel reports errors in its own shape.
+            if ($response === null) {
+                throw new Exception('Could not reach the game panel to delete this server.');
+            }
+
+            if ($response->failed() && $response->status() !== 404) {
+                throw new Exception(
+                    'Could not delete the server on ' . $attempt['client']->panelName()
+                    . ' (HTTP ' . $response->status() . ')'
+                );
             }
         });
     }

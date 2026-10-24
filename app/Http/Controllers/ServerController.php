@@ -131,18 +131,21 @@ class ServerController extends Controller
             ], 422);
         }
 
-        try {
-            $response = $this->pterodactyl->powerAction($server, $request->input('signal'));
-        } catch (Exception $e) {
-            Log::error('Power action threw', [
-                'server_id' => $server->id,
-                'signal' => $request->input('signal'),
-                'panel' => $this->pterodactyl->panelName(),
-                'error' => $e->getMessage(),
-            ]);
+        $signal = $request->input('signal');
 
+        // The two panels answer different parts of the same API shape, so a
+        // refusal on the configured one is retried on the other when it has
+        // credentials.
+        $attempt = (new \App\Services\GamePanelFallback($this->pterodactyl))->attempt(
+            fn ($client) => $client->powerAction($server, $signal),
+            'power:' . $signal
+        );
+
+        $response = $attempt['response'];
+
+        if ($response === null) {
             return response()->json([
-                'error' => $this->powerFailureMessage(null, $e->getMessage()),
+                'error' => $this->powerFailureMessage(null, __('The game panel could not be reached.')),
             ], 502);
         }
 
@@ -157,8 +160,8 @@ class ServerController extends Controller
             Log::warning('Power action refused by the game panel', [
                 'server_id' => $server->id,
                 'identifier' => $server->identifier,
-                'signal' => $request->input('signal'),
-                'panel' => $this->pterodactyl->panelName(),
+                'signal' => $signal,
+                'panel' => $attempt['client']->panelName(),
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
@@ -170,7 +173,7 @@ class ServerController extends Controller
 
         // The panel reports the transition, not the end state, so the list is
         // told what to expect until the next poll confirms it.
-        $expected = match ($request->input('signal')) {
+        $expected = match ($signal) {
             'start' => 'starting',
             'restart' => 'restarting',
             default => 'stopping',
@@ -470,23 +473,19 @@ class ServerController extends Controller
         throw new \BadMethodCallException('handlePostCreation() is deprecated. Use PostServerCreationJob instead.');
     }
 
-    public function destroy(Server $server): RedirectResponse
+    public function destroy(Server $server, Request $request)
     {
         if ($server->user_id !== Auth::id()) {
-            return back()->with('error', __('This is not your Server!'));
+            return $this->serverActionResult($request, false, __('This is not your Server!'));
         }
 
         try {
-            $serverInfo = $this->pterodactyl->getServerAttributes($server->pterodactyl_id);
-
-            if (!$serverInfo) {
-                throw new Exception("Server not found on Pterodactyl panel");
-            }
-
+            // Reading the server back first only tells us the panel is awake;
+            // the delete itself reports whether it worked, and a server the
+            // panel has already lost must still be removable from here.
             $this->handleServerDeletion($server);
 
-            return redirect()->route('servers.index')
-                ->with('success', __('Server removed'));
+            return $this->serverActionResult($request, true, __('Server removed'));
         } catch (Exception $e) {
             Log::error('Server deletion failed', [
                 'server_id' => $server->id,
@@ -494,9 +493,31 @@ class ServerController extends Controller
                 'error' => $e->getMessage()
             ]);
 
-            return redirect()->route('servers.index')
-                ->with('error', __('Server removal failed: ') . $e->getMessage());
+            return $this->serverActionResult(
+                $request,
+                false,
+                __('Server removal failed: ') . $e->getMessage()
+            );
         }
+    }
+
+    /**
+     * The list calls these over fetch, which repeats a non-GET method when it
+     * follows a redirect — a DELETE answered with one came back as a DELETE on
+     * `/servers` and failed a second time, hiding the real reason. A request
+     * that asks for JSON gets JSON.
+     */
+    private function serverActionResult(Request $request, bool $ok, string $message)
+    {
+        if ($request->expectsJson()) {
+            return response()->json(
+                $ok ? ['message' => $message] : ['error' => $message],
+                $ok ? 200 : 422
+            );
+        }
+
+        return redirect()->route('servers.index')
+            ->with($ok ? 'success' : 'error', $message);
     }
 
     private function handleServerDeletion(Server $server): void
@@ -515,19 +536,22 @@ class ServerController extends Controller
         Cache::forget('user_credits_left:' . $server->user_id);
     }
 
-    public function cancel(Server $server): RedirectResponse
+    public function cancel(Server $server, Request $request)
     {
         if ($server->user_id !== Auth::id()) {
-            return back()->with('error', __('This is not your Server!'));
+            return $this->serverActionResult($request, false, __('This is not your Server!'));
         }
 
         try {
             $server->update(['canceled' => now()]);
-            return redirect()->route('servers.index')
-                ->with('success', __('Server canceled'));
+
+            return $this->serverActionResult($request, true, __('Server canceled'));
         } catch (Exception $e) {
-            return redirect()->route('servers.index')
-                ->with('error', __('Server cancellation failed: ') . $e->getMessage());
+            return $this->serverActionResult(
+                $request,
+                false,
+                __('Server cancellation failed: ') . $e->getMessage()
+            );
         }
     }
 
