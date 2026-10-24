@@ -10,6 +10,7 @@ class ServerSettings extends Settings
     public bool $enable_upgrade = false;
     public bool $location_description_enabled = false;
     public bool $power_controls_enabled = false;
+    public bool $prefer_newest_java = true;
     public int $allocation_limit = 0;
 
     public static function group(): string
@@ -29,6 +30,7 @@ class ServerSettings extends Settings
             'allocation_limit' => 'required|integer|min:0',
             'location_description_enabled' => 'nullable|string',
             'power_controls_enabled' => 'nullable|string',
+            'prefer_newest_java' => 'nullable|string',
         ];
     }
 
@@ -61,6 +63,11 @@ class ServerSettings extends Settings
                 'label' => 'Enable Location Description',
                 'type' => 'boolean',
                 'description' => 'Enable the location description field on the server creation page.',
+            ],
+            'prefer_newest_java' => [
+                'label' => 'Prefer the newest Java image',
+                'type' => 'boolean',
+                'description' => 'When an egg offers several Java runtimes, sync the newest one instead of whatever the panel lists first, preferring a GraalJDK build at the same version. Turn this off if you host game versions that need an older Java.',
             ],
             'power_controls_enabled' => [
                 'label' => 'Power Controls Enabled',

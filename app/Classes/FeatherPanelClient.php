@@ -246,33 +246,11 @@ class FeatherPanelClient implements GamePanelClient
     }
 
     /**
-     * Not every spell sets `default_docker_image`; the rest keep their images
-     * in `docker_images`, a JSON map of label => image. Server creation needs
-     * a concrete image, so the first entry is used as the fallback.
+     * One rule for both panels; see Egg::resolveDockerImage().
      */
     private function resolveDockerImage(array $spell): string
     {
-        $default = trim((string) ($spell['default_docker_image'] ?? ''));
-
-        if ($default !== '') {
-            return $default;
-        }
-
-        $images = $spell['docker_images'] ?? null;
-
-        if (is_string($images)) {
-            $images = json_decode($images, true);
-        }
-
-        if (is_array($images) && count($images) > 0) {
-            $first = reset($images);
-
-            if (is_string($first) && trim($first) !== '') {
-                return trim($first);
-            }
-        }
-
-        return '';
+        return Egg::resolveDockerImage($spell);
     }
 
     private function mapServer(array $s): array

@@ -40,6 +40,148 @@ class Egg extends Model
         });
     }
 
+    /**
+     * Which image a server built from this egg should run.
+     *
+     * For anything with a Java runtime on offer the newest one wins, and a
+     * GraalJDK build wins a tie at the same version. The panels' own idea of a
+     * default is no help here: it is whatever sits first in the list, which on
+     * this install meant Paper defaulting to Java 8 while Java 26 and
+     * GraalJDK 26 were sitting right there unused.
+     *
+     * Everything else — Node, Python, plain Debian — is left alone: a declared
+     * default, then the image the panel names, then the first of the map.
+     *
+     * @param  array<string, mixed>  $attributes  one egg as the panel returned it
+     */
+    public static function resolveDockerImage(array $attributes): string
+    {
+        $images = self::imageMap($attributes);
+
+        if (self::prefersNewestJava()) {
+            $java = self::newestJavaImage($images);
+
+            if ($java !== null) {
+                return $java;
+            }
+        }
+
+        $default = trim((string) ($attributes['default_docker_image'] ?? ''));
+
+        if ($default !== '') {
+            return $default;
+        }
+
+        $single = trim((string) ($attributes['docker_image'] ?? ''));
+
+        if ($single !== '') {
+            return $single;
+        }
+
+        foreach ($images as $image) {
+            if (trim($image) !== '') {
+                return trim($image);
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * The egg's images as a label => image map, whichever way it arrived.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, string>
+     */
+    private static function imageMap(array $attributes): array
+    {
+        $images = $attributes['docker_images'] ?? null;
+
+        if (is_string($images)) {
+            $images = json_decode($images, true);
+        }
+
+        if (!is_array($images)) {
+            return [];
+        }
+
+        $out = [];
+
+        foreach ($images as $label => $image) {
+            if (is_string($image) && trim($image) !== '') {
+                $out[(string) $label] = trim($image);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The newest Java image on offer, or null when the egg has none.
+     *
+     * @param  array<string, string>  $images
+     */
+    private static function newestJavaImage(array $images): ?string
+    {
+        $best = null;
+        $bestRank = null;
+
+        foreach ($images as $label => $image) {
+            $rank = self::javaRank($label . ' ' . $image);
+
+            if ($rank === null) {
+                continue;
+            }
+
+            if ($bestRank === null || $rank > $bestRank) {
+                $bestRank = $rank;
+                $best = $image;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
+     * [major version, flavour] for a Java runtime, or null if this is not one.
+     *
+     * The flavour only breaks a tie, so a GraalJDK 26 beats a plain Java 26
+     * but never a plain Java 27. Node and Python entries do not match: their
+     * labels and tags carry no "java".
+     *
+     * @return array{0: int, 1: int}|null
+     */
+    private static function javaRank(string $haystack): ?array
+    {
+        $haystack = strtolower($haystack);
+        $best = null;
+
+        if (!preg_match_all('/(?:^|[^a-z])(graaljdk|graalvm|graal|openjdk|java)[\s_:.\-]*(\d+)/', $haystack, $matches, PREG_SET_ORDER)) {
+            return null;
+        }
+
+        foreach ($matches as $match) {
+            $candidate = [(int) $match[2], str_starts_with($match[1], 'graal') ? 1 : 0];
+
+            if ($best === null || $candidate > $best) {
+                $best = $candidate;
+            }
+        }
+
+        return $best;
+    }
+
+    /** The behaviour is a setting, because an old game version may want an old runtime. */
+    private static function prefersNewestJava(): bool
+    {
+        try {
+            return (bool) app(\App\Settings\ServerSettings::class)->prefer_newest_java;
+        } catch (\Throwable $e) {
+            // Settings not migrated yet: keep the panel's own choice.
+            return false;
+        }
+    }
+
     public static function syncEggs()
     {
         Nest::syncNests();
@@ -55,7 +197,7 @@ class Egg extends Model
                 $array['nest_id'] = $egg['attributes']['nest'];
                 $array['name'] = $egg['attributes']['name'];
                 $array['description'] = $egg['attributes']['description'];
-                $array['docker_image'] = $egg['attributes']['docker_image'];
+                $array['docker_image'] = self::resolveDockerImage($egg['attributes']);
                 $array['startup'] = $egg['attributes']['startup'];
                 $array['updated_at'] = now();
 
