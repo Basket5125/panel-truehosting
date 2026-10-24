@@ -65,6 +65,7 @@ class Server extends Model
         "identifier",
         "billing_priority",
         "product_id",
+        "node_id",
         "pterodactyl_id",
         "user_id",
         "last_billed",
@@ -191,6 +192,17 @@ class Server extends Model
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id', 'id');
+    }
+
+    /**
+     * The node this server was deployed on. Null on rows created before the
+     * column existed, until `cp:servers:syncnodes` fills them in.
+     *
+     * @return BelongsTo
+     */
+    public function node()
+    {
+        return $this->belongsTo(\App\Models\Pterodactyl\Node::class, 'node_id', 'id');
     }
 
     /**

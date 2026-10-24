@@ -74,7 +74,7 @@
             <span class="th-stat-icon"><i class="fas fa-coins"></i></span>
             <span class="th-stat-body">
                 <span class="th-stat-label">{{ $general_settings->credits_display_name }}</span>
-                <span class="th-stat-value">{{ Currency::formatForDisplay($credits) }}</span>
+                <span class="th-stat-value">{{ Currency::formatTrimmed($credits) }}</span>
             </span>
         </div>
 
@@ -91,7 +91,7 @@
             <span class="th-stat-body">
                 <span class="th-stat-label">{{ __('Usage') }}</span>
                 <span class="th-stat-value">
-                    {{ Currency::formatForDisplay($usage) }}<sup>/ {{ __('mo') }}</sup>
+                    {{ Currency::formatTrimmed($usage) }}<sup>/ {{ __('mo') }}</sup>
                 </span>
             </span>
         </div>
@@ -141,7 +141,7 @@
                 <h3 class="th-card-title">{{ __('Credit balance forecast') }}</h3>
                 <span class="th-card-actions text-muted" style="font-size:.78rem">
                     {{ __('at the current burn rate of :amount / month', [
-                        'amount' => Currency::formatForDisplay($usage) . ' ' . $general_settings->credits_display_name,
+                        'amount' => Currency::formatTrimmed($usage) . ' ' . $general_settings->credits_display_name,
                     ]) }}
                 </span>
             </div>
@@ -243,7 +243,7 @@
                                         <td>{{ $partnerDiscount->partner_discount }}%</td>
                                         <td>{{ $partnerDiscount->registered_user_discount }}%</td>
                                         <td>
-                                            {{ Currency::formatForDisplay($referral_settings->reward) }}
+                                            {{ Currency::formatTrimmed($referral_settings->reward) }}
                                             {{ $general_settings->credits_display_name }}
                                         </td>
                                         <td>
@@ -254,7 +254,7 @@
                                     @else
                                         @if (in_array($referral_settings->mode, ['sign-up', 'both']))
                                             <td>
-                                                {{ Currency::formatForDisplay($referral_settings->reward) }}
+                                                {{ Currency::formatTrimmed($referral_settings->reward) }}
                                                 {{ $general_settings->credits_display_name }}
                                             </td>
                                         @endif

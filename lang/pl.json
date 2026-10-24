@@ -831,5 +831,14 @@
     "Defines the priority for server billing. If not provided, the value of selected product will be used.": "Określa priorytet rozliczania serwera. Jeśli nie wybierzesz, użyta zostanie wartość z pakietu.",
     "Pay with": "Płatność przez",
     "Large order above (% CPU)": "Duże zamówienie powyżej (% CPU)",
-    "Above either of these, only nodes ticked as \"takes large orders\" are used. 100% is one vCore.": "Powyżej którejkolwiek z tych wartości użyte zostaną tylko węzły zaznaczone jako przyjmujące duże zamówienia. 100% to jeden rdzeń."
+    "Above either of these, only nodes ticked as \"takes large orders\" are used. 100% is one vCore.": "Powyżej którejkolwiek z tych wartości użyte zostaną tylko węzły zaznaczone jako przyjmujące duże zamówienia. 100% to jeden rdzeń.",
+    "Finish the configuration": "Dokończ konfigurację",
+    "Set the resources with the sliders": "Ustaw zasoby suwakami",
+    "Choose the software": "Wybierz oprogramowanie",
+    "Choose how to pay": "Wybierz sposób płatności",
+    "Move the sliders to set what the server gets.": "Przesuń suwaki, żeby ustalić zasoby serwera.",
+    "Without staff": "Bez kadry",
+    "Leaves out accounts holding a role with power :power or above.": "Pomija konta z rolą o mocy :power lub wyższej.",
+    "Earnings per node": "Zarobek z węzła",
+    "Node not recorded": "Węzeł nieznany"
 }

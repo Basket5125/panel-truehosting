@@ -3449,12 +3449,21 @@ body.th-body .th-display {
    surface so an error or a saved-settings toast looks like the rest.
    ========================================================================== */
 
-.th-body .swal2-container {
+/* Only a real dialog dims the page. A toast shares the same container, and
+   dimming that painted a dark slab around the corner of the screen. */
+.th-body .swal2-container:not(.swal2-toast-shown) {
     backdrop-filter: blur(2px);
 }
 
-.th-body .swal2-container.swal2-backdrop-show {
+.th-body .swal2-container.swal2-backdrop-show:not(.swal2-toast-shown) {
     background: rgba(4, 6, 11, 0.62);
+}
+
+.th-body .swal2-container.swal2-toast-shown,
+.th-body .swal2-container.swal2-toast-shown.swal2-backdrop-show {
+    background: transparent;
+    backdrop-filter: none;
+    padding: 0.9rem;
 }
 
 .th-body .swal2-popup {
@@ -3575,8 +3584,14 @@ body.th-body .th-display {
     color: var(--text-primary);
 }
 
-/* Toasts sit in the corner and carry their own, tighter spacing. */
+/* Toasts sit in the corner and carry their own, tighter spacing. The surface
+   is restated here because SweetAlert injects its own `.swal2-popup.swal2-toast`
+   rule into the head at runtime, which ties on specificity and lands later. */
 .th-body .swal2-popup.swal2-toast {
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card);
+    color: var(--text-primary);
     padding: 0.7rem 0.9rem;
     box-shadow: var(--shadow-lg);
 }
@@ -3588,9 +3603,32 @@ body.th-body .th-display {
 }
 
 .th-body .swal2-popup.swal2-toast .swal2-icon {
-    width: 1.6rem;
-    height: 1.6rem;
-    margin: 0 0.55rem 0 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    min-width: 1.5rem;
+    border-width: 2px;
+    margin: 0 0.6rem 0 0;
+}
+
+.th-body .swal2-popup.swal2-toast .swal2-icon .swal2-icon-content {
+    font-size: 1rem;
+}
+
+/* The ring animation draws these at the icon's full size. */
+.th-body .swal2-popup.swal2-toast .swal2-success-ring {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-width: 2px;
+}
+
+.th-body .swal2-popup.swal2-toast .swal2-success-line-tip,
+.th-body .swal2-popup.swal2-toast .swal2-success-line-long {
+    height: 2px;
+}
+
+/* The timer bar rides the bottom edge, so the surface has to clip it. */
+.th-body .swal2-popup.swal2-toast {
+    overflow: hidden;
 }
 
 .th-body .swal2-timer-progress-bar {
@@ -3617,4 +3655,112 @@ body.th-body .th-display {
 
 .th-gateway.is-logoless .th-gateway-name {
     display: block;
+}
+
+/* ==========================================================================
+   Configurator: choices still to make
+   The sliders start at the plan's minimum, which is a starting point rather
+   than a decision, so nothing is orderable until it has been made one.
+   ========================================================================== */
+
+.th-required-note {
+    margin: 0 0 1.1rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: var(--radius-sm);
+    background: rgba(239, 68, 68, 0.08);
+    color: #fca5a5;
+    font-size: 0.82rem;
+}
+
+.th-required {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-top: 1rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: var(--radius-sm);
+    background: rgba(239, 68, 68, 0.08);
+    color: #fca5a5;
+    font-size: 0.82rem;
+}
+
+.th-required > i {
+    margin-top: 0.15rem;
+    font-size: 0.9rem;
+}
+
+.th-required strong {
+    display: block;
+    margin-bottom: 0.2rem;
+    color: #fecaca;
+}
+
+.th-required ul {
+    margin: 0;
+    padding-left: 1.05rem;
+}
+
+/* An untouched slider is drawn in the same red, so the eye goes to the
+   control rather than only to the message. */
+.th-slider.is-untouched .th-range::-webkit-slider-thumb {
+    background: #ef4444;
+}
+
+.th-slider.is-untouched .th-range::-moz-range-thumb {
+    background: #ef4444;
+}
+
+/* The track is the input itself here, not a pseudo-element. */
+.th-slider.is-untouched .th-range {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.th-slider.is-untouched .th-slider-value {
+    color: #fca5a5;
+}
+
+.th-body .form-control.is-invalid,
+.th-body select.form-control.is-invalid {
+    border-color: rgba(239, 68, 68, 0.6);
+    background-image: none;
+}
+
+/* A filter that is either on or off, next to the period selector. */
+.th-body a.th-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.42rem 0.75rem;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: var(--transition-fast);
+}
+
+.th-body a.th-toggle:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.th-body a.th-toggle i {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.th-body a.th-toggle.is-on {
+    border-color: rgba(59, 127, 250, 0.4);
+    background: rgba(6, 91, 241, 0.12);
+    color: var(--brand-light);
+}
+
+.th-body a.th-toggle.is-on i {
+    color: var(--brand-light);
 }

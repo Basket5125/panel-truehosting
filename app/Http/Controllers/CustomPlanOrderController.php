@@ -93,7 +93,13 @@ class CustomPlanOrderController extends Controller
         $request->validate([
             'name' => 'required|string|max:191',
             'egg' => 'required|integer',
-            'payment_mode' => 'nullable|in:credits,direct',
+            // When the plan offers both, the customer has to say which; there
+            // is no sensible default between spending credits and being sent
+            // to a payment page.
+            'payment_mode' => [
+                $customplan->allowsCredits() && $customplan->allowsDirect() ? 'required' : 'nullable',
+                'in:credits,direct',
+            ],
             'billing_priority' => ['nullable', new Enum(BillingPriority::class)],
             'egg_variables' => 'nullable|string',
         ]);

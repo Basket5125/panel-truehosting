@@ -6,6 +6,7 @@ use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Models\Pterodactyl\Node;
 use App\Models\Server;
 use App\Models\ShopProduct;
 use App\Models\User;
@@ -30,6 +31,17 @@ class AnalyticsController extends Controller
         '12m' => 365,
     ];
 
+    /** A role at or above this power counts as staff. */
+    public const STAFF_POWER = 80;
+
+    /**
+     * Users whose rows are left out while the staff filter is on, or an empty
+     * array when it is off. Kept as a property so every query shares one lookup.
+     *
+     * @var array<int, int>
+     */
+    private array $excludedUserIds = [];
+
     public function index(Request $request, GeneralSettings $general_settings)
     {
         $this->checkPermission(PaymentController::VIEW_PERMISSION);
@@ -39,6 +51,12 @@ class AnalyticsController extends Controller
             $period = '30d';
         }
 
+        // Staff accounts distort every figure on this page: free servers, test
+        // orders, credits granted by hand. Leaving them out is a toggle rather
+        // than a rule, because sometimes you do want the real totals.
+        $hideStaff = $request->boolean('hide_staff');
+        $this->excludedUserIds = $hideStaff ? $this->staffUserIds() : [];
+
         $days = self::PERIODS[$period];
         $monthly = $days > 90;
 
@@ -47,11 +65,21 @@ class AnalyticsController extends Controller
         // The same span again, immediately before, for the comparison figures.
         $previousStart = (clone $start)->subDays($days);
 
-        $paid = fn () => Payment::query()->where('status', PaymentStatus::PAID);
+        // Both the per-node table and the recurring-revenue tile are the same
+        // sum sliced differently, so the servers are walked once.
+        $byNode = $this->serversByNode();
+
+        $paid = fn () => $this->withoutExcluded(
+            Payment::query()->where('status', PaymentStatus::PAID),
+            'user_id'
+        );
 
         return view('admin.analytics.index')->with([
             'period' => $period,
             'periods' => array_keys(self::PERIODS),
+            'hideStaff' => $hideStaff,
+            'staffCount' => count($this->excludedUserIds),
+            'staffPower' => self::STAFF_POWER,
             'monthly' => $monthly,
             'start' => $start,
             'end' => $end,
@@ -65,20 +93,21 @@ class AnalyticsController extends Controller
             'paymentsCount' => $paid()->whereBetween('created_at', [$start, $end])->count(),
             'paymentsCountPrevious' => $paid()->whereBetween('created_at', [$previousStart, $start])->count(),
 
-            'mrrCredits' => $this->monthlyRecurringCredits(),
-            'creditsOutstanding' => (int) User::sum('credits'),
+            'mrrCredits' => $byNode->sum('mrr'),
+            'creditsOutstanding' => (int) $this->withoutExcluded(User::query(), 'id')->sum('credits'),
             'revenueForecast' => $this->revenueForecast(),
 
             'servers' => $this->serverTotals(),
             'serverSeries' => $this->serverSeries($start, $end, $monthly),
-            'newServers' => Server::whereBetween('created_at', [$start, $end])->count(),
-            'newServersPrevious' => Server::whereBetween('created_at', [$previousStart, $start])->count(),
+            'serversByNode' => $byNode,
+            'newServers' => $this->withoutExcluded(Server::whereBetween('created_at', [$start, $end]), 'user_id')->count(),
+            'newServersPrevious' => $this->withoutExcluded(Server::whereBetween('created_at', [$previousStart, $start]), 'user_id')->count(),
 
             'users' => [
-                'total' => User::count(),
-                'new' => User::whereBetween('created_at', [$start, $end])->count(),
-                'newPrevious' => User::whereBetween('created_at', [$previousStart, $start])->count(),
-                'withServers' => Server::distinct('user_id')->count('user_id'),
+                'total' => $this->withoutExcluded(User::query(), 'id')->count(),
+                'new' => $this->withoutExcluded(User::whereBetween('created_at', [$start, $end]), 'id')->count(),
+                'newPrevious' => $this->withoutExcluded(User::whereBetween('created_at', [$previousStart, $start]), 'id')->count(),
+                'withServers' => $this->withoutExcluded(Server::query(), 'user_id')->distinct('user_id')->count('user_id'),
             ],
 
             'topProducts' => $this->topProducts(),
@@ -89,6 +118,29 @@ class AnalyticsController extends Controller
 
             'credits_display_name' => $general_settings->credits_display_name,
         ]);
+    }
+
+    /**
+     * Ids of every user holding a role at or above the staff power.
+     *
+     * @return array<int, int>
+     */
+    private function staffUserIds(): array
+    {
+        return User::whereHas('roles', fn ($q) => $q->where('power', '>=', self::STAFF_POWER))
+            ->pluck('id')
+            ->all();
+    }
+
+    /**
+     * Drop the excluded users from a query. A no-op while the filter is off,
+     * so no needless WHERE lands on the common path.
+     */
+    private function withoutExcluded($query, string $column)
+    {
+        return empty($this->excludedUserIds)
+            ? $query
+            : $query->whereNotIn($column, $this->excludedUserIds);
     }
 
     /**
@@ -117,9 +169,12 @@ class AnalyticsController extends Controller
         $currency = $this->dominantCurrency();
         $format = $monthly ? '%Y-%m' : '%Y-%m-%d';
 
-        $rows = Payment::where('status', PaymentStatus::PAID)
-            ->where('currency_code', $currency)
-            ->whereBetween('created_at', [$from, $to])
+        $rows = $this->withoutExcluded(
+            Payment::where('status', PaymentStatus::PAID)
+                ->where('currency_code', $currency)
+                ->whereBetween('created_at', [$from, $to]),
+            'user_id'
+        )
             ->select(
                 DB::raw("DATE_FORMAT(created_at, '{$format}') as bucket"),
                 DB::raw('SUM(total_price) as total')
@@ -140,11 +195,13 @@ class AnalyticsController extends Controller
     {
         $format = $monthly ? '%Y-%m' : '%Y-%m-%d';
 
-        $created = Server::whereBetween('created_at', [$from, $to])
+        $created = $this->withoutExcluded(
+            Server::whereBetween('created_at', [$from, $to]), 'user_id'
+        )
             ->select(DB::raw("DATE_FORMAT(created_at, '{$format}') as bucket"), DB::raw('COUNT(*) as total'))
             ->groupBy('bucket')->pluck('total', 'bucket')->toArray();
 
-        $lost = Server::whereNotNull('canceled')
+        $lost = $this->withoutExcluded(Server::whereNotNull('canceled'), 'user_id')
             ->whereBetween('canceled', [$from, $to])
             ->select(DB::raw("DATE_FORMAT(canceled, '{$format}') as bucket"), DB::raw('COUNT(*) as total'))
             ->groupBy('bucket')->pluck('total', 'bucket')->toArray();
@@ -181,9 +238,12 @@ class AnalyticsController extends Controller
     /** @return array<string, int> */
     private function revenueByMethod(Carbon $from, Carbon $to): array
     {
-        return Payment::where('status', PaymentStatus::PAID)
-            ->where('currency_code', $this->dominantCurrency())
-            ->whereBetween('created_at', [$from, $to])
+        return $this->withoutExcluded(
+            Payment::where('status', PaymentStatus::PAID)
+                ->where('currency_code', $this->dominantCurrency())
+                ->whereBetween('created_at', [$from, $to]),
+            'user_id'
+        )
             ->select('payment_method', DB::raw('SUM(total_price) as total'))
             ->groupBy('payment_method')
             ->orderByDesc('total')
@@ -201,9 +261,12 @@ class AnalyticsController extends Controller
     {
         $from = now()->subMonths($months - 1)->startOfMonth();
 
-        $rows = Payment::where('status', PaymentStatus::PAID)
-            ->where('currency_code', $this->dominantCurrency())
-            ->where('created_at', '>=', $from)
+        $rows = $this->withoutExcluded(
+            Payment::where('status', PaymentStatus::PAID)
+                ->where('currency_code', $this->dominantCurrency())
+                ->where('created_at', '>=', $from),
+            'user_id'
+        )
             ->select(DB::raw("DATE_FORMAT(created_at, '%Y-%m') as bucket"), DB::raw('SUM(total_price) as total'))
             ->groupBy('bucket')
             ->pluck('total', 'bucket')
@@ -240,36 +303,63 @@ class AnalyticsController extends Controller
         return ['value' => (int) round(array_sum($months) / count($months)), 'basis' => count($months)];
     }
 
-    /**
-     * What the active servers bill per month, in credits.
-     */
-    private function monthlyRecurringCredits(): int
-    {
-        $total = 0;
-
-        Server::with('product')
-            ->whereNull('suspended')
-            ->whereNull('canceled')
-            ->chunk(500, function ($servers) use (&$total) {
-                foreach ($servers as $server) {
-                    if ($server->product) {
-                        $total += $server->product->getMonthlyPrice();
-                    }
-                }
-            });
-
-        return (int) round($total);
-    }
-
     /** @return array<string, int> */
     private function serverTotals(): array
     {
         return [
-            'total' => Server::count(),
-            'active' => Server::whereNull('suspended')->whereNull('canceled')->count(),
-            'suspended' => Server::whereNotNull('suspended')->count(),
-            'canceled' => Server::whereNotNull('canceled')->count(),
+            'total' => $this->withoutExcluded(Server::query(), 'user_id')->count(),
+            'active' => $this->withoutExcluded(Server::whereNull('suspended')->whereNull('canceled'), 'user_id')->count(),
+            'suspended' => $this->withoutExcluded(Server::whereNotNull('suspended'), 'user_id')->count(),
+            'canceled' => $this->withoutExcluded(Server::whereNotNull('canceled'), 'user_id')->count(),
         ];
+    }
+
+    /**
+     * What each node carries and earns a month, in credits.
+     *
+     * Payments are not tied to a node, so the figure is what the servers on it
+     * bill per month — the same basis as the recurring revenue tile.
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function serversByNode()
+    {
+        // Counting by (node, product) keeps this to two queries no matter how
+        // many servers there are.
+        $rows = $this->withoutExcluded(
+            Server::whereNull('suspended')->whereNull('canceled'), 'user_id'
+        )
+            ->select('node_id', 'product_id', DB::raw('COUNT(*) as servers'))
+            ->groupBy('node_id', 'product_id')
+            ->get();
+
+        $products = Product::whereIn('id', $rows->pluck('product_id')->unique())->get()->keyBy('id');
+        $nodes = Node::whereIn('id', $rows->pluck('node_id')->unique())->get()->keyBy('id');
+
+        $totals = [];
+
+        foreach ($rows as $row) {
+            // Servers created before the node was recorded group together
+            // until `cp:servers:syncnodes` has been run.
+            $nodeId = $row->node_id === null ? 0 : (int) $row->node_id;
+            $count = (int) $row->servers;
+            $product = $products[$row->product_id] ?? null;
+
+            if (!isset($totals[$nodeId])) {
+                $totals[$nodeId] = [
+                    'name' => $nodeId === 0
+                        ? __('Node not recorded')
+                        : ($nodes[$nodeId]->name ?? ('#' . $nodeId)),
+                    'servers' => 0,
+                    'mrr' => 0,
+                ];
+            }
+
+            $totals[$nodeId]['servers'] += $count;
+            $totals[$nodeId]['mrr'] += $product ? (int) round($product->getMonthlyPrice() * $count) : 0;
+        }
+
+        return collect($totals)->sortByDesc('mrr')->values();
     }
 
     /**
@@ -278,7 +368,9 @@ class AnalyticsController extends Controller
      */
     private function topProducts()
     {
-        $counts = Server::whereNull('suspended')->whereNull('canceled')
+        $counts = $this->withoutExcluded(
+            Server::whereNull('suspended')->whereNull('canceled'), 'user_id'
+        )
             ->select('product_id', DB::raw('COUNT(*) as servers'))
             ->groupBy('product_id')
             ->orderByDesc('servers')
@@ -303,8 +395,11 @@ class AnalyticsController extends Controller
     /** Store items ranked by paid orders in the period. */
     private function topShopProducts(Carbon $from, Carbon $to)
     {
-        $rows = Payment::where('status', PaymentStatus::PAID)
-            ->whereBetween('created_at', [$from, $to])
+        $rows = $this->withoutExcluded(
+            Payment::where('status', PaymentStatus::PAID)
+                ->whereBetween('created_at', [$from, $to]),
+            'user_id'
+        )
             ->whereNotNull('shop_item_product_id')
             ->select(
                 'shop_item_product_id',
@@ -329,8 +424,11 @@ class AnalyticsController extends Controller
     /** Customers ranked by what they actually paid in the period. */
     private function topCustomers(Carbon $from, Carbon $to)
     {
-        $rows = Payment::where('status', PaymentStatus::PAID)
-            ->whereBetween('created_at', [$from, $to])
+        $rows = $this->withoutExcluded(
+            Payment::where('status', PaymentStatus::PAID)
+                ->whereBetween('created_at', [$from, $to]),
+            'user_id'
+        )
             ->select('user_id', DB::raw('COUNT(*) as orders'), DB::raw('SUM(total_price) as total'))
             ->groupBy('user_id')
             ->orderByDesc('total')
@@ -350,7 +448,9 @@ class AnalyticsController extends Controller
     /** The currency most payments are made in; charts are drawn in it. */
     private function dominantCurrency(): string
     {
-        return Payment::where('status', PaymentStatus::PAID)
+        return $this->withoutExcluded(
+            Payment::where('status', PaymentStatus::PAID), 'user_id'
+        )
             ->select('currency_code', DB::raw('COUNT(*) as c'))
             ->groupBy('currency_code')
             ->orderByDesc('c')

@@ -43,6 +43,18 @@ class CurrencyHelper
         return $formatter->format($display);
     }
 
+    /**
+     * Like formatForDisplay(), but a whole number is written without the
+     * decimals: "12,50" stays, "12,00" becomes "12". Only an exactly zero
+     * fraction is dropped, so no figure is ever rounded away.
+     */
+    public function formatTrimmed($amount, $decimals = 2, $locale = null, $ignoreOverride = false)
+    {
+        $formatted = $this->formatForDisplay($amount, $decimals, $locale, $ignoreOverride);
+
+        return preg_replace('/[.,]0+$/', '', $formatted);
+    }
+
     public function formatForForm($amount, $decimals = 2)
     {
         return number_format($this->convertForDisplay($amount), $decimals, '.', '');

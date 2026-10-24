@@ -44,8 +44,11 @@
                         <h3 class="th-card-title">{{ __('Resources') }}</h3>
                     </div>
                     <div class="th-card-body">
+                        <p x-cloak x-show="!touched" class="th-required-note">
+                            {{ __('Move the sliders to set what the server gets.') }}
+                        </p>
                         @foreach ($fields as $key => $f)
-                            <div class="th-slider">
+                            <div class="th-slider" :class="touched ? '' : 'is-untouched'">
                                 <div class="th-slider-head">
                                     <label class="th-label mb-0" for="f-{{ $key }}">{{ $f['label'] }}</label>
                                     <output class="th-slider-value">
@@ -55,7 +58,8 @@
                                 <input id="f-{{ $key }}" type="range" class="th-range"
                                        name="{{ $key }}"
                                        min="{{ $f['min'] }}" max="{{ $f['max'] }}" step="{{ $f['step'] }}"
-                                       x-model.number="res.{{ $key }}" @input="recalc()">
+                                       x-model.number="res.{{ $key }}"
+                                       @input="touched = true; recalc()">
                                 <div class="th-slider-scale">
                                     <span>{{ $f['min'] }}{{ $f['suffix'] }}</span>
                                     <span>{{ $f['max'] }}{{ $f['suffix'] }}</span>
@@ -78,14 +82,16 @@
 
                         <div class="th-field">
                             <label class="th-label" for="egg">{{ __('Oprogramowanie / Gry') }}</label>
-                            <select id="egg" class="form-control" name="egg" required>
-                                @forelse ($eggs as $egg)
+                            <select id="egg" class="form-control" name="egg" required x-model="egg"
+                                    :class="missing.includes('egg') ? 'is-invalid' : ''">
+                                <option value="" disabled>
+                                    {{ $eggs->isEmpty() ? __('No software available') : __('Please select software ...') }}
+                                </option>
+                                @foreach ($eggs as $egg)
                                     <option value="{{ $egg->id }}" @selected(old('egg') == $egg->id)>
                                         {{ $egg->nest?->name ? $egg->nest->name . ' · ' : '' }}{{ $egg->name }}
                                     </option>
-                                @empty
-                                    <option value="" disabled>{{ __('No software available') }}</option>
-                                @endforelse
+                                @endforeach
                             </select>
                         </div>
                     </div>
@@ -123,6 +129,24 @@
                             </p>
                         </div>
 
+                        <div x-cloak x-show="missing.length > 0" class="th-required">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>{{ __('Finish the configuration') }}</strong>
+                                <ul>
+                                    <template x-if="missing.includes('resources')">
+                                        <li>{{ __('Set the resources with the sliders') }}</li>
+                                    </template>
+                                    <template x-if="missing.includes('egg')">
+                                        <li>{{ __('Choose the software') }}</li>
+                                    </template>
+                                    <template x-if="missing.includes('mode')">
+                                        <li>{{ __('Choose how to pay') }}</li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </div>
+
                         <template x-if="largeOrder">
                             <div class="alert alert-info">
                                 {{ __('This size is deployed on our stronger nodes.') }}
@@ -134,7 +158,7 @@
                                 <label class="th-label">{{ __('How do you want to pay?') }}</label>
                                 <div class="custom-control custom-radio mb-1">
                                     <input type="radio" class="custom-control-input" id="pm-credits"
-                                           name="payment_mode" value="credits" x-model="mode">
+                                           name="payment_mode" value="credits" x-model="mode" required>
                                     <label class="custom-control-label" for="pm-credits">
                                         {{ __('From credits') }}
                                         <span class="text-muted" x-text="'(' + inCredits() + ')'"></span>
@@ -160,6 +184,7 @@
                         @endif
 
                         <button type="submit" class="th-btn th-btn-primary th-btn-block mt-2"
+                                :disabled="missing.length > 0"
                                 @if ($eggs->isEmpty()) disabled @endif>
                             <i class="fas fa-plus"></i>{{ __('Create Server') }}
                         </button>
@@ -193,7 +218,14 @@
                 res: start,
                 // Which price list the summary is showing. The server decides
                 // again on order; this only drives what the customer reads.
-                mode: '{{ $plan->allowsCredits() ? 'credits' : 'direct' }}',
+                // Nothing is ticked up front when both are on offer: paying
+                // with money instead of credits is not a default to stumble into.
+                mode: '{{ $plan->allowsCredits() && $plan->allowsDirect() ? '' : ($plan->allowsCredits() ? 'credits' : 'direct') }}',
+                egg: '{{ old('egg', '') }}',
+                // The sliders start at the plan's minimum, which is a starting
+                // point and not a choice, so an order is held back until the
+                // customer has actually set them.
+                touched: false,
                 lines: [],
                 total: 0,
                 moneyTotal: 0,
@@ -240,6 +272,15 @@
 
                 unitLabel() {
                     return this.mode === 'direct' ? currency : creditsName;
+                },
+
+                /** What still has to be chosen before the order can be placed. */
+                get missing() {
+                    const out = [];
+                    if (!this.touched) out.push('resources');
+                    if (!this.egg) out.push('egg');
+                    if (!this.mode) out.push('mode');
+                    return out;
                 },
 
                 /** Mirrors CustomPlan::breakdown() for one of the two price lists. */

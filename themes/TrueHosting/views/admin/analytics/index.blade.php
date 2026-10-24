@@ -34,11 +34,23 @@
             </p>
         </div>
 
-        <div class="th-period">
-            @foreach ($periods as $p)
-                <a href="{{ route('admin.analytics.index', ['period' => $p]) }}"
-                   class="th-period-item @if ($period === $p) active @endif">{{ $labels[$p] }}</a>
-            @endforeach
+        <div class="d-flex flex-wrap align-items-center" style="gap:.75rem">
+            <a href="{{ route('admin.analytics.index', ['period' => $period, 'hide_staff' => $hideStaff ? 0 : 1]) }}"
+               class="th-toggle @if ($hideStaff) is-on @endif"
+               title="{{ __('Leaves out accounts holding a role with power :power or above.', ['power' => $staffPower]) }}">
+                <i class="fas @if ($hideStaff) fa-check-square @else fa-square @endif"></i>
+                <span>{{ __('Without staff') }}</span>
+                @if ($hideStaff && $staffCount > 0)
+                    <span class="th-nav-badge">{{ $staffCount }}</span>
+                @endif
+            </a>
+
+            <div class="th-period">
+                @foreach ($periods as $p)
+                    <a href="{{ route('admin.analytics.index', ['period' => $p, 'hide_staff' => $hideStaff ? 1 : 0]) }}"
+                       class="th-period-item @if ($period === $p) active @endif">{{ $labels[$p] }}</a>
+                @endforeach
+            </div>
         </div>
     </div>
 
@@ -87,7 +99,7 @@
             <span class="th-stat-icon"><i class="fas fa-sync-alt"></i></span>
             <span class="th-stat-body">
                 <span class="th-stat-label">{{ __('Monthly recurring') }}</span>
-                <span class="th-stat-value">{{ Currency::formatForDisplay($mrrCredits) }}</span>
+                <span class="th-stat-value">{{ Currency::formatTrimmed($mrrCredits) }}</span>
                 <span class="th-stat-note">{{ $credits_display_name }} / {{ __('mo') }}</span>
             </span>
         </div>
@@ -109,7 +121,7 @@
             <span class="th-stat-icon is-warning"><i class="fas fa-coins"></i></span>
             <span class="th-stat-body">
                 <span class="th-stat-label">{{ __('Credits outstanding') }}</span>
-                <span class="th-stat-value">{{ Currency::formatForDisplay($creditsOutstanding) }}</span>
+                <span class="th-stat-value">{{ Currency::formatTrimmed($creditsOutstanding) }}</span>
                 <span class="th-stat-note">{{ __('already paid for, not yet used') }}</span>
             </span>
         </div>
@@ -192,7 +204,38 @@
                                     </span>
                                 </td>
                                 <td class="text-right">{{ $product['servers'] }}</td>
-                                <td class="text-right">{{ Currency::formatForDisplay($product['mrr']) }}</td>
+                                <td class="text-right">{{ Currency::formatTrimmed($product['mrr']) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="3" class="text-muted">{{ __('No active servers.') }}</td></tr>
+                        @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="th-card mb-4">
+                <div class="th-card-head">
+                    <i class="fas fa-hdd"></i>
+                    <h3 class="th-card-title">{{ __('Earnings per node') }}</h3>
+                </div>
+                <div class="th-card-body p-0">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>{{ __('Node') }}</th>
+                            <th class="text-right">{{ __('Servers') }}</th>
+                            <th class="text-right">{{ $credits_display_name }} / {{ __('per Month') }}</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @forelse ($serversByNode as $node)
+                            <tr>
+                                <td>{{ $node['name'] }}</td>
+                                <td class="text-right">{{ $node['servers'] }}</td>
+                                <td class="text-right">{{ Currency::formatTrimmed($node['mrr']) }}</td>
                             </tr>
                         @empty
                             <tr><td colspan="3" class="text-muted">{{ __('No active servers.') }}</td></tr>
@@ -296,7 +339,7 @@
                         <tr>
                             <td>{{ __('Average per paying customer') }}</td>
                             <td class="text-right">
-                                {{ Currency::formatForDisplay((int) round($arpu)) }} {{ $credits_display_name }}
+                                {{ Currency::formatTrimmed((int) round($arpu)) }} {{ $credits_display_name }}
                             </td>
                         </tr>
                         <tr>
