@@ -38,7 +38,8 @@
          The order is validated again on the server either way. --}}
     <form method="POST" action="{{ route('plans.order', $plan->id) }}" novalidate
           x-data="planBuilder()" x-init="recalc(); $watch('mode', () => recalc())"
-          @submit="if (missing.length > 0) { attempted = true; $event.preventDefault(); }">
+          @submit="if (missing.length > 0) { attempted = true; $event.preventDefault(); }"
+          x-effect="egg; $nextTick(() => $('[data-toggle=&quot;popover&quot;]').popover())">
         @csrf
 
         <div class="row">
@@ -83,7 +84,7 @@
                         </div>
 
                         <div class="th-field">
-                            <label class="th-label" for="egg">{{ __('Oprogramowanie / Gry') }}</label>
+                            <label class="th-label" for="egg">{{ __('Software / Games') }}</label>
                             <select id="egg" class="form-control" name="egg" required x-model="egg"
                                     :class="attempted && missing.includes('egg') ? 'is-invalid' : ''">
                                 <option value="" disabled>
@@ -96,6 +97,44 @@
                                 @endforeach
                             </select>
                         </div>
+
+                        {{-- What the chosen software lets the customer set, such as the
+                             game version. The server accepts no others. --}}
+                        <template x-if="variables().length > 0">
+                            <div>
+                                <p class="th-label mt-3 mb-2">{{ __('Software options') }}</p>
+
+                                <template x-for="variable in variables()" :key="variable.env_variable">
+                                    <div class="th-field">
+                                        <label class="th-label" :for="'var-' + variable.env_variable">
+                                            <span x-text="variable.name"></span>
+                                            <i class="fas fa-info-circle th-hint" x-show="variable.description"
+                                               data-toggle="popover" data-trigger="hover"
+                                               :data-content="variable.description"></i>
+                                        </label>
+
+                                        <template x-if="variable.options.length > 0">
+                                            <select class="form-control"
+                                                    :id="'var-' + variable.env_variable"
+                                                    :name="'variables[' + variable.env_variable + ']'">
+                                                <template x-for="choice in variable.options" :key="choice">
+                                                    <option :value="choice" x-text="choice"
+                                                            :selected="choice === variable.default_value"></option>
+                                                </template>
+                                            </select>
+                                        </template>
+
+                                        <template x-if="variable.options.length === 0">
+                                            <input type="text" class="form-control"
+                                                   :id="'var-' + variable.env_variable"
+                                                   :name="'variables[' + variable.env_variable + ']'"
+                                                   :value="variable.default_value"
+                                                   :placeholder="variable.default_value">
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -203,14 +242,15 @@
         function planBuilder() {
             // Mirrors the server-side pricing so the figure moves without a
             // round trip. The order itself is always priced again on the server.
-            const fields = @json($fields);
+            const fields = @json($fields, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
             const discountPerUnit = {{ (float) $plan->discount_per_unit }};
             const discountMax = {{ (float) $plan->discount_max }};
             const largeMemory = {{ $plan->large_order_memory !== null ? (int) $plan->large_order_memory : 'null' }};
             const largeCpu = {{ $plan->large_order_cpu !== null ? (int) $plan->large_order_cpu : 'null' }};
             const locale = '{{ str_replace('_', '-', app()->getLocale()) }}';
             const currency = '{{ $plan->currency_code }}';
-            const creditsName = @json($credits_display_name);
+            const creditsName = @json($credits_display_name, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+            const eggVariables = @json($eggVariables, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
             const start = {};
             Object.keys(fields).forEach(k => start[k] = fields[k].min);
@@ -223,7 +263,7 @@
                 // with money instead of credits is not a default to stumble into.
                 mode: '{{ $plan->allowsCredits() && $plan->allowsDirect() ? '' : ($plan->allowsCredits() ? 'credits' : 'direct') }}',
                 egg: '{{ old('egg', '') }}',
-                name: @json(old('name', '')),
+                name: @json(old('name', ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
                 // Nothing is marked as wrong until the customer has tried to
                 // order: a form that greets you in red has not been filled in
                 // badly, it has not been filled in at all.
@@ -270,6 +310,11 @@
 
                 inMoney() {
                     return this.asMoney(this.moneyTotal);
+                },
+
+                /** The chosen software's settings, if it offers any. */
+                variables() {
+                    return eggVariables[this.egg] ?? [];
                 },
 
                 unitLabel() {

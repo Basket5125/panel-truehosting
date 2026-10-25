@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Pterodactyl\Egg;
 use App\Models\Server;
+use App\Services\EggVariables;
 use App\Services\TrialService;
 use App\Settings\GeneralSettings;
 use Coderflex\LaravelTurnstile\Rules\TurnstileCheck;
@@ -25,6 +26,7 @@ class TrialServerController extends Controller
     public function __construct(
         private TrialService $trials,
         private GeneralSettings $generalSettings,
+        private EggVariables $variables,
     ) {
         $this->middleware('auth');
     }
@@ -47,7 +49,7 @@ class TrialServerController extends Controller
                     'eggs' => $this->trials->eggsFor($product)->map(fn (Egg $egg) => [
                         'id' => $egg->id,
                         'name' => ($egg->nest?->name ? $egg->nest->name . ' · ' : '') . $egg->name,
-                        'variables' => $this->customerVariables($egg),
+                        'variables' => $this->variables->forCustomer($egg),
                     ])->values(),
                 ],
             ]),
@@ -86,13 +88,14 @@ class TrialServerController extends Controller
 
         try {
             $egg = $this->resolveEgg($request);
-            $variables = $this->validatedVariables($egg, (array) $request->input('variables', []));
-
             $server = $this->trials->create(Auth::user(), [
                 'name' => $request->input('name'),
                 'product' => $request->input('product'),
                 'egg' => $egg->id,
-                'egg_variables' => $variables === [] ? null : json_encode($variables),
+                'egg_variables' => $this->variables->validatedJson(
+                    $egg,
+                    (array) $request->input('variables', [])
+                ),
             ]);
         } catch (Throwable $e) {
             Log::warning('Trial server creation failed', [
@@ -158,81 +161,4 @@ class TrialServerController extends Controller
         return $egg;
     }
 
-    /**
-     * The variables a customer is allowed to see and set for this egg.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function customerVariables(Egg $egg): array
-    {
-        return collect((array) $egg->environment)
-            ->filter(fn ($variable) => ($variable['user_viewable'] ?? false) && ($variable['user_editable'] ?? false))
-            ->map(fn ($variable) => [
-                'name' => $variable['name'] ?? $variable['env_variable'],
-                'env_variable' => $variable['env_variable'],
-                'description' => $variable['description'] ?? '',
-                'default_value' => (string) ($variable['default_value'] ?? ''),
-                'required' => str_contains((string) ($variable['rules'] ?? ''), 'required'),
-                // One of a fixed set, when the egg says so, so the wizard can
-                // offer a list instead of a free text box.
-                'options' => $this->ruleOptions((string) ($variable['rules'] ?? '')),
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Validate submitted variables against the rules stored with the egg.
-     *
-     * The rules come from our own copy of the egg and never from the request:
-     * a crafted payload must not be able to relax its own validation, and a
-     * variable the egg does not expose to customers is dropped outright.
-     *
-     * @param  array<string, mixed>  $submitted
-     * @return array<string, string>
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
-    private function validatedVariables(Egg $egg, array $submitted): array
-    {
-        $allowed = collect((array) $egg->environment)
-            ->filter(fn ($variable) => ($variable['user_viewable'] ?? false) && ($variable['user_editable'] ?? false))
-            ->keyBy('env_variable');
-
-        $values = [];
-        $rules = [];
-        $names = [];
-
-        foreach ($allowed as $key => $variable) {
-            $values[$key] = array_key_exists($key, $submitted)
-                ? (string) $submitted[$key]
-                : (string) ($variable['default_value'] ?? '');
-            $rules[$key] = $variable['rules'] ?? 'nullable';
-            $names[$key] = $variable['name'] ?? $key;
-        }
-
-        if ($values === []) {
-            return [];
-        }
-
-        $validator = Validator::make($values, $rules);
-        $validator->setAttributeNames($names);
-        $validator->validate();
-
-        return $values;
-    }
-
-    /**
-     * Values an `in:` rule allows, if the rule has one.
-     *
-     * @return array<int, string>
-     */
-    private function ruleOptions(string $rules): array
-    {
-        if (!preg_match('/(?:^|\|)in:([^|]+)/', $rules, $match)) {
-            return [];
-        }
-
-        return array_values(array_filter(array_map('trim', explode(',', $match[1]))));
-    }
 }

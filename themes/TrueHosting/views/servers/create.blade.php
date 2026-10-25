@@ -330,9 +330,13 @@
                 selectedProductObject: {},
 
                 //values
-                user: {!! $user !!},
-                nests: {!! $nests !!},
-                eggsSave: {!! $eggs !!}, //store back-end eggs
+                // Encoded with JSON_HEX_TAG rather than echoed raw: these
+                // carry names and descriptions from the game panel, and a
+                // closing script tag inside one would otherwise end this
+                // script early.
+                user: @json($user, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+                nests: @json($nests, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+                eggsSave: @json($eggs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), //store back-end eggs
                 eggs: [],
                 locations: [],
                 products: [],

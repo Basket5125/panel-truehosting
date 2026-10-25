@@ -51,7 +51,8 @@ class CustomOrderProvisioner
             $order->name,
             'direct',
             null,
-            null
+            // The settings the customer picked before paying.
+            $order->egg_variables
         );
 
         $order->update([

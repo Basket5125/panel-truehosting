@@ -259,13 +259,13 @@
 
     <script>
         function trialWizard() {
-            const catalogue = @json($catalogue);
+            const catalogue = @json($catalogue, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
             return {
                 step: 1,
-                product: @json(old('product', '')),
-                egg: @json(old('egg', '')),
-                name: @json(old('name', '')),
+                product: @json(old('product', ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+                egg: @json(old('egg', ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+                name: @json(old('name', ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
                 attempted: false,
 
                 init() {

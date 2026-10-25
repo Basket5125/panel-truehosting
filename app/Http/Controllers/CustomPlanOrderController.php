@@ -8,6 +8,7 @@ use App\Models\CustomOrder;
 use App\Models\CustomPlan;
 use App\Models\ShopProduct;
 use App\Services\CustomOrderProvisioner;
+use App\Services\EggVariables;
 use App\Models\Pterodactyl\Egg;
 use App\Settings\GeneralSettings;
 use Illuminate\Http\JsonResponse;
@@ -28,8 +29,10 @@ class CustomPlanOrderController extends Controller
 {
     public const CREATE_PERMISSION = 'user.server.create';
 
-    public function __construct(private GeneralSettings $generalSettings)
-    {
+    public function __construct(
+        private GeneralSettings $generalSettings,
+        private EggVariables $variables,
+    ) {
         $this->middleware('auth');
     }
 
@@ -57,6 +60,11 @@ class CustomPlanOrderController extends Controller
         return view('plans.show', [
             'plan' => $customplan,
             'eggs' => $eggs,
+            // What each egg lets the customer set, keyed by egg, so the
+            // builder can swap the fields without a round trip.
+            'eggVariables' => $eggs->mapWithKeys(fn (Egg $egg) => [
+                $egg->id => $this->variables->forCustomer($egg),
+            ]),
             'defaults' => $defaults,
             'breakdown' => $customplan->breakdown($defaults),
             'price' => $customplan->priceFor($defaults),
@@ -101,7 +109,7 @@ class CustomPlanOrderController extends Controller
                 'in:credits,direct',
             ],
             'billing_priority' => ['nullable', new Enum(BillingPriority::class)],
-            'egg_variables' => 'nullable|string',
+            'variables' => 'nullable|array',
         ]);
 
         $lockKey = 'custom_plan_order_' . Auth::id();
@@ -124,6 +132,15 @@ class CustomPlanOrderController extends Controller
         // Never price from the request body.
         $resources = $customplan->clamp($request->all());
 
+        // Validated against the egg's own rules, not the request's.
+        try {
+            $eggVariables = $this->variables->validatedJson($egg, (array) $request->input('variables', []));
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Cache::forget($lockKey);
+
+            throw $e;
+        }
+
         // Only a mode the plan actually permits, whatever was submitted.
         $mode = $request->input('payment_mode');
         if (!in_array($mode, ['credits', 'direct'], true)
@@ -134,7 +151,9 @@ class CustomPlanOrderController extends Controller
 
         try {
             if ($mode === 'direct') {
-                $order = $this->startFirstPeriodPayment($customplan, $user, $resources, $egg, $request->input('name'));
+                $order = $this->startFirstPeriodPayment(
+                    $customplan, $user, $resources, $egg, $request->input('name'), $eggVariables
+                );
                 Cache::forget($lockKey);
 
                 return redirect()->route('checkout', $order->shop_product_id);
@@ -148,7 +167,7 @@ class CustomPlanOrderController extends Controller
                 $request->input('name'),
                 'credits',
                 $request->input('billing_priority'),
-                $request->input('egg_variables')
+                $eggVariables
             );
 
             Cache::forget($lockKey);
@@ -174,8 +193,14 @@ class CustomPlanOrderController extends Controller
      *
      * @param  array<string, int>  $resources
      */
-    private function startFirstPeriodPayment(CustomPlan $plan, $user, array $resources, Egg $egg, string $name): CustomOrder
-    {
+    private function startFirstPeriodPayment(
+        CustomPlan $plan,
+        $user,
+        array $resources,
+        Egg $egg,
+        string $name,
+        ?string $eggVariables = null
+    ): CustomOrder {
         $credits = $plan->priceFor($resources);
         $money = $plan->moneyPriceFor($resources);
 
@@ -205,6 +230,7 @@ class CustomPlanOrderController extends Controller
             'egg_id' => $egg->id,
             'name' => $name,
             'resources' => $resources,
+            'egg_variables' => $eggVariables,
             'price_credits' => $credits,
             'price_money' => $money,
             'currency_code' => $plan->currency_code,
