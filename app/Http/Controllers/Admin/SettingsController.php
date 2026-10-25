@@ -89,7 +89,7 @@ class SettingsController extends Controller
                     'identifier' => $optionInputData[$key]['identifier'] ?? 'option'
                 ];
 
-                if($optionInputData[$key]['type'] === 'number') {
+                if(($optionInputData[$key]['type'] ?? null) === 'number') {
                     $optionsData[$key]['step'] = $optionInputData[$key]['step'] ?? '1';
 
                     if ($optionInputData[$key]['mustBeConverted'] ?? false) {
@@ -184,8 +184,20 @@ class SettingsController extends Controller
                 $settingsClass->$key = $request->has($key);
                 continue;
             }
+            // Locale settings keep their list as a comma separated string.
             if ($rp->name == 'available') {
-                $settingsClass->$key = implode(",", $request->$key);
+                $settingsClass->$key = implode(",", (array) $request->input($key, []));
+                continue;
+            }
+
+            // Any other list is stored as a list. A multi-select submits
+            // nothing at all when everything is cleared, which has to read as
+            // an empty array rather than null.
+            if ($rpType && $rpType->getName() === 'array') {
+                $settingsClass->$key = array_values(array_filter(
+                    (array) $request->input($key, []),
+                    fn ($entry) => $entry !== null && $entry !== ''
+                ));
                 continue;
             }
 

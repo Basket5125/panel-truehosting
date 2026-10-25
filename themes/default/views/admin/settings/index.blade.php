@@ -268,13 +268,24 @@
                                                                         @break
 
                                                                         @case($value['type'] == 'multiselect')
+                                                                            @php
+                                                                                // A list may arrive as an array or, for the locale
+                                                                                // settings, as a comma separated string.
+                                                                                $selected = is_array($value['value'])
+                                                                                    ? array_map('strval', $value['value'])
+                                                                                    : array_filter(array_map('trim', explode(',', (string) $value['value'])));
+                                                                                // Options are either a plain list or value => label.
+                                                                                $isLabelled = $value['options'] !== array_values($value['options']);
+                                                                            @endphp
                                                                             <select id="{{ $key }}"
                                                                                 class="custom-select w-100"
-                                                                                name="{{ $key }}[]" multiple>
-                                                                                @foreach ($value['options'] as $option)
+                                                                                name="{{ $key }}[]" multiple
+                                                                                size="{{ min(10, max(3, count($value['options']))) }}">
+                                                                                @foreach ($value['options'] as $optionValue => $optionLabel)
+                                                                                    @php($option = $isLabelled ? (string) $optionValue : (string) $optionLabel)
                                                                                     <option value="{{ $option }}"
-                                                                                        {{ strpos($value['value'], $option) !== false ? 'selected' : '' }}>
-                                                                                        {{ __($option) }}
+                                                                                        @selected(in_array($option, $selected, true))>
+                                                                                        {{ $isLabelled ? $optionLabel : __($optionLabel) }}
                                                                                     </option>
                                                                                 @endforeach
                                                                             </select>

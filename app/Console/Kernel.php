@@ -28,6 +28,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('servers:charge')->everyMinute();
+        $schedule->command('cp:trials:expire')->everyFiveMinutes();
         $schedule->command('servers:notify-suspension')->daily();
         $schedule->command('cp:versioncheck:get')->daily();
         $schedule->command('payments:open:clear')->daily();

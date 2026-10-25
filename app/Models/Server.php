@@ -66,6 +66,8 @@ class Server extends Model
         "billing_priority",
         "product_id",
         "node_id",
+        "trial_ends_at",
+        "trial_extensions",
         "pterodactyl_id",
         "user_id",
         "last_billed",
@@ -77,6 +79,7 @@ class Server extends Model
      * @var string[]
      */
     protected $casts = [
+        'trial_ends_at' => 'datetime',
         'suspended' => 'datetime',
         'last_billed' => 'datetime',
         'canceled' => 'datetime',
@@ -131,6 +134,18 @@ class Server extends Model
                 );
             }
         });
+    }
+
+    /** A free trial server, which expires instead of being billed. */
+    public function isTrial(): bool
+    {
+        return $this->trial_ends_at !== null;
+    }
+
+    /** Whether a trial has run past its time. */
+    public function trialExpired(): bool
+    {
+        return $this->isTrial() && $this->trial_ends_at->isPast();
     }
 
     /** Billed by a payment each period rather than from credits. */

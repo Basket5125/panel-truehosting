@@ -778,12 +778,22 @@ class FeatherPanelClient implements GamePanelClient
         $environment = [];
         $variables = collect(is_string($variables) ? json_decode($variables, true) : $variables);
 
+        // Same rule as the Pterodactyl driver: only variables the egg marks as
+        // the customer's to set may come from a request.
+        $editable = [];
+
         foreach ($egg->environment as $envVariable) {
             if (!empty($envVariable['default_value'])) {
                 $environment[$envVariable['env_variable']] = $envVariable['default_value'];
             }
+
+            if (($envVariable['user_editable'] ?? false) && ($envVariable['user_viewable'] ?? false)) {
+                $editable[] = $envVariable['env_variable'];
+            }
         }
 
-        return array_merge($environment, $variables->toArray());
+        $submitted = array_intersect_key($variables->toArray(), array_flip($editable));
+
+        return array_merge($environment, $submitted);
     }
 }

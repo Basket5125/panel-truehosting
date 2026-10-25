@@ -77,7 +77,7 @@
                         };
                     @endphp
 
-                    <div class="th-server-card">
+                    <div class="th-server-card @if ($server->isTrial()) is-trial @endif">
 
                         <div class="th-server-head">
                             <span class="th-stat-icon" style="width:40px;height:40px;font-size:.95rem">
@@ -91,6 +91,9 @@
                             @php
                                 $stateInfo = $server->powerStateInfo();
                             @endphp
+                            @if ($server->isTrial())
+                                <span class="th-status is-trial">{{ __('Trial') }}</span>
+                            @endif
                             <span class="th-status {{ $stateInfo['class'] }}"
                                   :class="'th-status ' + cls('{{ $server->id }}')"
                                   x-text="label('{{ $server->id }}')">{{ $stateInfo['label'] }}</span>
@@ -134,10 +137,15 @@
                             </li>
                         </ul>
 
+                        {{-- A trial is not billed, so a billing cycle and a monthly figure
+                             would only confuse; its own note says what happens instead. --}}
                         <div class="d-flex justify-content-between align-items-end mt-3 pt-3"
                              style="border-top:1px solid var(--glass-border);gap:1rem">
                             <div style="min-width:0">
-                                @if ($server->isDirectBilled())
+                                @if ($server->isTrial())
+                                    <span class="th-stat-label">{{ __('Costs you') }}</span>
+                                    <span style="font-size:.84rem">{{ __('Nothing while the trial runs') }}</span>
+                                @elseif ($server->isDirectBilled())
                                     <span class="th-stat-label">{{ __('Paid until') }}</span>
                                     <span style="font-size:.84rem">
                                         {{ $server->paid_until ? \Carbon\Carbon::parse($server->paid_until)->toDayDateTimeString() : '—' }}
@@ -150,7 +158,13 @@
                                 @endif
                             </div>
                             <div class="text-right" style="white-space:nowrap">
-                                <span class="th-stat-label">{{ $credits_display_name }}</span>
+                                <span class="th-stat-label">
+                                    @if ($server->isTrial())
+                                        {{ __('Afterwards') }}
+                                    @else
+                                        {{ $credits_display_name }}
+                                    @endif
+                                </span>
                                 <strong style="font-size:1.02rem">{{ $product->display_price }}</strong>
                                 <span class="d-block text-muted" style="font-size:.74rem">{{ $periodLabel }}</span>
                             </div>
@@ -196,6 +210,42 @@
                                             </span>
                                         </button>
                                     </form>
+                                @endif
+                            </div>
+                        @endif
+
+                        @if ($server->isTrial())
+                            @php
+                                $trialEnds = $server->trial_ends_at;
+                                $canExtend = $server->trial_extensions < $trial_max_extensions;
+                                $trialPrice = $product->display_price;
+                            @endphp
+
+                            <div class="th-trial-note">
+                                <i class="fas fa-flask"></i>
+                                <span>
+                                    @if ($trialEnds->isPast())
+                                        {{ __('The trial has ended.') }}
+                                    @else
+                                        {{ __('Trial ends') }} {{ $trialEnds->diffForHumans() }}
+                                    @endif
+                                </span>
+                            </div>
+
+                            <div class="th-trial-actions">
+                                <button type="button" class="th-btn th-btn-primary th-btn-sm th-buy-trial"
+                                        data-server="{{ $server->id }}"
+                                        data-name="{{ $server->name }}"
+                                        data-product="{{ $product->name }}"
+                                        data-price="{{ (int) round($product->price) }}">
+                                    <i class="fas fa-shopping-cart"></i>{{ __('Buy') }}
+                                </button>
+
+                                @if ($canExtend)
+                                    <button type="button" class="th-btn th-btn-ghost th-btn-sm th-extend-trial"
+                                            data-server="{{ $server->id }}">
+                                        <i class="fas fa-clock"></i>{{ __('Extend') }}
+                                    </button>
                                 @endif
                             </div>
                         @endif
@@ -324,6 +374,108 @@
             };
         }
 
+        // ---------------- Trial: buy, extend, and the first-visit hints -------
+
+        const thTrialBuy = (button) => {
+            const price = Number(button.dataset.price);
+            const credits = {{ (int) round(Auth::user()->credits) }};
+            const after = credits - price;
+            const fmt = (value) => (value / 1000).toLocaleString('{{ str_replace('_', '-', app()->getLocale()) }}', {
+                minimumFractionDigits: 2, maximumFractionDigits: 2,
+            }).replace(/[.,]00$/, '');
+
+            Swal.fire({
+                title: '{{ __('Buy this server?') }}',
+                html: '<div class="th-buy-rows">'
+                    + '<div><span>{{ __('Package') }}</span><span>' + button.dataset.product + '</span></div>'
+                    + '<div><span>{{ __('Your balance') }}</span><span>' + fmt(credits) + ' {{ $credits_display_name }}</span></div>'
+                    + '<div><span>{{ __('Price') }}</span><span>' + fmt(price) + ' {{ $credits_display_name }}</span></div>'
+                    + '<div><span>{{ __('Left afterwards') }}</span><span class="' + (after < 0 ? 'th-buy-short' : '') + '">'
+                    + fmt(after) + ' {{ $credits_display_name }}</span></div>'
+                    + '</div>',
+                showCancelButton: true,
+                confirmButtonText: '{{ __('Buy') }}',
+                cancelButtonText: '{{ __('Cancel') }}',
+                // Nothing to confirm when the balance will not cover it.
+                didOpen: () => {
+                    if (after < 0) {
+                        Swal.getConfirmButton().disabled = true;
+                    }
+                },
+            }).then(async (result) => {
+                if (!result.isConfirmed) return;
+
+                try {
+                    const response = await fetch('{{ url('servers') }}/' + button.dataset.server + '/trial/buy', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'Accept': 'application/json',
+                        },
+                    });
+
+                    const body = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        thToast('error', body.error ?? '{{ __('Something went wrong, please try again later.') }}');
+                        return;
+                    }
+
+                    window.location.reload();
+                } catch (e) {
+                    thToast('error', '{{ __('Something went wrong, please try again later.') }}');
+                }
+            });
+        };
+
+        const thTrialExtend = async (button) => {
+            button.disabled = true;
+
+            try {
+                const response = await fetch('{{ url('servers') }}/' + button.dataset.server + '/trial/extend', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json',
+                    },
+                });
+
+                const body = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    thToast('error', body.error ?? '{{ __('Something went wrong, please try again later.') }}');
+                    button.disabled = false;
+                    return;
+                }
+
+                window.location.reload();
+            } catch (e) {
+                thToast('error', '{{ __('Something went wrong, please try again later.') }}');
+                button.disabled = false;
+            }
+        };
+
+        @if (session('trial_created'))
+            // Shown once, right after the trial was created.
+            const thTrialTour = () => Swal.fire({
+                icon: 'info',
+                title: '{{ __('Your trial server is ready') }}',
+                html: @json(__('Click <strong>Manage</strong> to reach the console and the files.')),
+                confirmButtonText: '{{ __('Next') }}',
+                showCancelButton: true,
+                cancelButtonText: '{{ __('Got it') }}',
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+
+                Swal.fire({
+                    icon: 'success',
+                    title: '{{ __('Liked it?') }}',
+                    html: @json(__('Click <strong>Buy</strong> on the trial server to keep it for good.')),
+                    confirmButtonText: '{{ __('Got it') }}',
+                });
+            });
+        @endif
+
         function thCopyAddress(id) {
             const el = document.getElementById('addr-' + id);
             if (!el) return;
@@ -418,6 +570,18 @@
         };
 
         document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.th-buy-trial').forEach((button) => {
+                button.addEventListener('click', () => thTrialBuy(button));
+            });
+
+            document.querySelectorAll('.th-extend-trial').forEach((button) => {
+                button.addEventListener('click', () => thTrialExtend(button));
+            });
+
+            @if (session('trial_created'))
+                thTrialTour();
+            @endif
+
             $('[data-toggle="popover"]').popover();
             $('[data-toggle="tooltip"]').tooltip();
         });

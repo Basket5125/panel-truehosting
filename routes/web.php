@@ -76,6 +76,15 @@ Route::middleware(['auth', 'checkSuspended'])->group(function () {
     Route::resource('notifications', NotificationController::class);
     Route::post('/servers/{server}/renew', [\App\Http\Controllers\ServerRenewalController::class, 'renew'])
         ->middleware('throttle:10,1')->name('servers.renew');
+    // Free trial server: the wizard, and the two things that can happen to one.
+    Route::get('/trial', [\App\Http\Controllers\TrialServerController::class, 'create'])->name('trial.create');
+    Route::post('/trial', [\App\Http\Controllers\TrialServerController::class, 'store'])
+        ->middleware('throttle:10,1')->name('trial.store');
+    Route::post('/servers/{server}/trial/buy', [\App\Http\Controllers\TrialServerController::class, 'purchase'])
+        ->middleware('throttle:10,1')->name('trial.purchase');
+    Route::post('/servers/{server}/trial/extend', [\App\Http\Controllers\TrialServerController::class, 'extend'])
+        ->middleware('throttle:10,1')->name('trial.extend');
+
     // Declared before the resource routes, so `servers/states` is not read as
     // a server id.
     Route::get('/servers/states', [ServerController::class, 'states'])

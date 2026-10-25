@@ -116,6 +116,11 @@
             $canAdmin = Auth::user()->canAny($adminPermissions);
 
             $serverCount = Auth::user()->servers()->count();
+            // Whether the trial is on offer at all; cheap enough to ask each
+            // request, since it is two settings and one product lookup.
+            $trialOffered = app(\App\Services\TrialService::class)->offered()
+                && app(\App\Services\TrialService::class)->blockedReason(Auth::user()) === null;
+
             $hasCustomPlans = cache()->remember(
                 'th.has_custom_plans',
                 now()->addMinutes(5),
@@ -159,6 +164,14 @@
                 <span class="th-nav-label">{{ __('Servers') }}</span>
                 <span class="th-nav-badge">{{ $serverCount }}/{{ Auth::user()->server_limit }}</span>
             </a>
+
+            @if ($trialOffered)
+                <a href="{{ route('trial.create') }}"
+                   class="th-nav-link @if (Request::routeIs('trial.*')) active @endif">
+                    <i class="th-nav-icon fas fa-flask"></i>
+                    <span class="th-nav-label">{{ __('Free trial') }}</span>
+                </a>
+            @endif
 
             @if ($hasCustomPlans)
                 <a href="{{ route('plans.index') }}"

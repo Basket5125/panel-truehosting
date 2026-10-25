@@ -78,6 +78,8 @@ class ServerController extends Controller
         return view('servers.index')->with([
             'servers' => $servers,
             'power_controls_enabled' => $this->serverSettings->power_controls_enabled,
+            'trial_max_extensions' => app(\App\Settings\TrialSettings::class)->max_extensions,
+            'trial_offered' => app(\App\Services\TrialService::class)->offered(),
             'credits_display_name' => $this->generalSettings->credits_display_name,
             'pterodactyl_url' => $this->pteroSettings->panel_url,
             'phpmyadmin_url' => $this->generalSettings->phpmyadmin_url

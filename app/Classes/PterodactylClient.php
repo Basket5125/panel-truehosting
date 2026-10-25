@@ -627,14 +627,27 @@ class PterodactylClient implements GamePanelClient
         // Support for front-end and api variables format.
         $variables = collect(is_string($variables) ? json_decode($variables, true) : $variables);
 
+        // Only what the egg itself marks as the customer's to set. The values
+        // reach here from a form, so a crafted request would otherwise be able
+        // to write any variable the egg has — a download URL, an install
+        // argument — and not only the ones it chose to expose.
+        $editable = [];
+
         foreach ($egg->environment as $envVariable) {
             if (!empty($envVariable['default_value'])) {
                 $environment[$envVariable['env_variable']] = $envVariable['default_value'];
             }
+
+            if (($envVariable['user_editable'] ?? false) && ($envVariable['user_viewable'] ?? false)) {
+                $editable[] = $envVariable['env_variable'];
+            }
         }
 
-        $environment = array_merge($environment, $variables->toArray());
+        $submitted = array_intersect_key(
+            $variables->toArray(),
+            array_flip($editable)
+        );
 
-        return $environment;
+        return array_merge($environment, $submitted);
     }
 }
