@@ -35,7 +35,10 @@ class ServerCreationService
         $this->userSettings = app(UserSettings::class);
         $this->generalSettings = app(GeneralSettings::class);
         $this->serverSettings = app(ServerSettings::class);
-        $this->pterodactylClient = app(GamePanelClient::class, [$this->pterodactylSettings]);
+        $this->pterodactylClient = app(GamePanelClient::class);
+        // No parameters: the binding builds the configured driver by itself,
+        // and passing any makes the container skip a bound instance, which
+        // quietly defeated every attempt to stand in for the panel.
         $this->creditService = app(CreditService::class);
     }
 

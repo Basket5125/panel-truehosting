@@ -650,7 +650,13 @@ class ServerController extends Controller
         }
 
         try {
-            $this->processUpgrade($server, $oldProduct, $newProduct, $user);
+            $restarted = $this->processUpgrade($server, $oldProduct, $newProduct, $user);
+
+            if (!$restarted) {
+                return redirect()->route('servers.show', ['server' => $server->id])
+                    ->with('warning', __('Server upgraded. Restart it to apply the new limits.'));
+            }
+
             return redirect()->route('servers.show', ['server' => $server->id])
                 ->with('success', __('Server Successfully Upgraded'));
         } catch (Exception $e) {
@@ -714,7 +720,15 @@ class ServerController extends Controller
         return true;
     }
 
-    private function processUpgrade(Server $server, Product $oldProduct, Product $newProduct, User $user): void
+    /**
+     * Apply an upgrade.
+     *
+     * @return bool whether the server was restarted; the new limits are only
+     *              live once it has been, but a panel that refuses the restart
+     *              has not undone the upgrade, so the customer is told to do it
+     *              themselves rather than being shown a failure.
+     */
+    private function processUpgrade(Server $server, Product $oldProduct, Product $newProduct, User $user): bool
     {
         $server->allocation = $this->pterodactyl->getServerAttributes($server->pterodactyl_id)['allocation'];
 
@@ -723,10 +737,7 @@ class ServerController extends Controller
             throw new Exception("Failed to update server on Pterodactyl");
         }
 
-        $restartResponse = $this->pterodactyl->powerAction($server, 'restart');
-        if ($restartResponse->failed()) {
-            throw new Exception('Could not restart the server: ' . $restartResponse->json()['errors'][0]['detail']);
-        }
+        $restarted = $this->tryRestart($server);
 
         // Calculate refund
         $refund = $this->calculateRefund($server, $oldProduct);
@@ -745,6 +756,38 @@ class ServerController extends Controller
 
         // Charge for new product
         $user->decrement('credits', $newProduct->price);
+
+        return $restarted;
+    }
+
+    /**
+     * Restart a server, reporting whether it worked instead of throwing.
+     *
+     * The body shape differs between panels, so the reason is read defensively
+     * and only written to the log; the customer gets a plain instruction.
+     */
+    private function tryRestart(Server $server): bool
+    {
+        try {
+            $response = $this->pterodactyl->powerAction($server, 'restart');
+
+            if ($response->successful()) {
+                return true;
+            }
+
+            Log::warning('Could not restart the server after an upgrade', [
+                'server_id' => $server->id,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+        } catch (Exception $e) {
+            Log::warning('Restart after an upgrade threw', [
+                'server_id' => $server->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return false;
     }
 
     private function calculateRefund(Server $server, Product $oldProduct): float

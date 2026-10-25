@@ -912,5 +912,7 @@
     "Discord account linked, but we could not add you to our Discord server.": "Konto Discord połączone, ale nie udało się dodać Cię do naszego serwera Discord.",
     "That Discord account is already linked to another account here.": "To konto Discord jest już połączone z innym kontem w panelu.",
     "Node priority": "Priorytet węzłów",
-    "A lower number is tried first. Nodes with the same number keep their usual order. Only the nodes selected above are used.": "Niższa liczba jest próbowana pierwsza. Węzły z tą samą liczbą zachowują zwykłą kolejność. Używane są tylko węzły zaznaczone powyżej."
+    "A lower number is tried first. Nodes with the same number keep their usual order. Only the nodes selected above are used.": "Niższa liczba jest próbowana pierwsza. Węzły z tą samą liczbą zachowują zwykłą kolejność. Używane są tylko węzły zaznaczone powyżej.",
+    "Server upgraded. Restart it to apply the new limits.": "Serwer został ulepszony. Zrestartuj go, aby zastosować nowe limity.",
+    "Could not apply the new limits on the game panel. Nothing was changed.": "Nie udało się zastosować nowych limitów w panelu gier. Nic nie zostało zmienione."
 }

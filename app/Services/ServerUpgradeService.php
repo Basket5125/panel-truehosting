@@ -16,12 +16,22 @@ class ServerUpgradeService
     private GamePanelClient $pterodactylClient;
 
     /**
+     * Whether the last upgrade managed to restart the server. False means the
+     * limits are applied but will only take effect once the customer restarts
+     * it themselves.
+     */
+    public bool $restarted = true;
+
+    /**
      * Create a new class instance.
      */
     public function __construct()
     {
         $this->pterodactylSettings = app(PterodactylSettings::class);
-        $this->pterodactylClient = app(GamePanelClient::class, [$this->pterodactylSettings]);
+        $this->pterodactylClient = app(GamePanelClient::class);
+        // No parameters: the binding builds the configured driver by itself,
+        // and passing any makes the container skip a bound instance, which
+        // quietly defeated every attempt to stand in for the panel.
     }
 
     /**
@@ -57,44 +67,34 @@ class ServerUpgradeService
             $updateServerResponse = $this->pterodactylClient->updateServerBuild($server->pterodactyl_id, $pterodactylServerAllocation, $product);
             
             if ($updateServerResponse->failed()) {
-                logger()->error('Failed to update server on Pterodactyl', [
+                logger()->error('Failed to update server on the game panel', [
                     'pterodactyl_id' => $server->pterodactyl_id,
                     'status' => $updateServerResponse->status(),
-                    'error' => $updateServerResponse->json()
+                    'error' => $updateServerResponse->body(),
                 ]);
 
-                $server->delete();
+                // The upgrade did not happen, so give the money back and leave
+                // the server exactly as it was. It used to be deleted here,
+                // which destroyed a working server over a failed request.
+                $this->refund($user, $product, $server);
 
                 throw new \Exception(
-                    sprintf(
-                        'Failed to update server on Pterodactyl: %s',
-                        $updateServerResponse->json()['errors'][0]['detail'] ?? 'Unknown error'
-                    )
+                    'Could not apply the new limits on the game panel. Nothing was changed.'
                 );
             }
 
-            $powerActionResponse = $this->pterodactylClient->powerAction($server, 'restart');
-
-            if ($powerActionResponse->failed()) {
-                logger()->error('Failed to restart server on Pterodactyl', [
-                    'pterodactyl_id' => $server->pterodactyl_id,
-                    'status' => $powerActionResponse->status(),
-                    'error' => $powerActionResponse->json()
-                ]);
-
-                throw new \Exception(
-                    sprintf(
-                        'Failed to restart server on Pterodactyl: %s',
-                        $powerActionResponse->json()['errors'][0]['detail'] ?? 'Unknown error'
-                    )
-                );
-            }
-
+            // The limits are on the panel now, so the upgrade is recorded
+            // whatever happens next.
             $server->update([
                 'product_id' => $product->id,
                 'last_billed' => now(),
                 'canceled' => null
             ]);
+
+            // Restarting is how the new limits take effect. A panel that
+            // refuses it has not undone the upgrade, so this is reported to the
+            // caller instead of being thrown.
+            $this->restarted = $this->tryRestart($server);
 
             return $server;
         } catch (\Exception $e) {
@@ -102,19 +102,71 @@ class ServerUpgradeService
         }
     }
 
-    private function validateAndPrepare(User $user, Product $product, Server $server): void
+    /**
+     * Restart a server, reporting whether it worked instead of throwing.
+     */
+    private function tryRestart(Server $server): bool
     {
-        // Check if user has enough credits to upgrade the server.
+        try {
+            $response = $this->pterodactylClient->powerAction($server, 'restart');
+
+            if ($response->successful()) {
+                return true;
+            }
+
+            logger()->warning('Could not restart the server after an upgrade', [
+                'server_id' => $server->id,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+        } catch (\Throwable $e) {
+            logger()->warning('Restart after an upgrade threw', [
+                'server_id' => $server->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return false;
+    }
+
+    /**
+     * Undo what validateAndPrepare() charged, when the upgrade cannot go ahead.
+     */
+    private function refund(User $user, Product $product, Server $server): void
+    {
+        $charged = $this->chargeFor($product, $server);
+
+        if ($charged > 0) {
+            $user->increment('credits', $charged);
+        } elseif ($charged < 0) {
+            $user->decrement('credits', abs($charged));
+        }
+    }
+
+    /**
+     * What this upgrade costs: the new product less the unused part of the old
+     * one. Rounded to a whole unit so that taking it and giving it back cancel
+     * out exactly.
+     */
+    private function chargeFor(Product $product, Server $server): int
+    {
         $billingPeriodSeconds = $this->getSecondsFromBillingPeriod($product);
         $timeUsed = now()->diffInSeconds($server->last_billed, true);
         $refundAmount = $server->product->price - ($server->product->price * ($timeUsed / $billingPeriodSeconds));
 
-        if ($user->credits < ($product->price - $refundAmount)) {
+        return (int) round($product->price - $refundAmount);
+    }
+
+    private function validateAndPrepare(User $user, Product $product, Server $server): void
+    {
+        // Check if user has enough credits to upgrade the server.
+        $finalPrice = $this->chargeFor($product, $server);
+
+        if ($user->credits < $finalPrice) {
             throw new \Exception('Insufficient credits to upgrade the server.', 422);
         }
 
         // Refund the user for the unused time on the current product.
-        $finalPrice = $product->price - $refundAmount;
         if ($finalPrice > 0) {
             $user->decrement('credits', $finalPrice);
         } elseif ($finalPrice < 0) {

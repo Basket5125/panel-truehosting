@@ -36,7 +36,10 @@ class ServerController extends Controller
     )
     {
         $this->pterodactylSettings = app(PterodactylSettings::class);
-        $this->pterodactylClient = app(GamePanelClient::class, [$this->pterodactylSettings]);
+        $this->pterodactylClient = app(GamePanelClient::class);
+        // No parameters: the binding builds the configured driver by itself,
+        // and passing any makes the container skip a bound instance, which
+        // quietly defeated every attempt to stand in for the panel.
     }
 
     public const ALLOWED_INCLUDES = ['product', 'user'];
@@ -165,7 +168,12 @@ class ServerController extends Controller
         try {
             $server = $this->serverUpgradeService->handle($user, $product, $server);
 
-            return ServerResource::make($server->fresh());
+            return ServerResource::make($server->fresh())
+                ->additional([
+                    // False means the new limits are applied but only take
+                    // effect once the server has been restarted.
+                    'restarted' => $this->serverUpgradeService->restarted,
+                ]);
         } catch (Exception $e) {
             return response()->json(['message' => $e->getMessage()], $e->getCode() ?: 500);
         }
