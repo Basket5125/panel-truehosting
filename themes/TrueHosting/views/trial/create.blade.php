@@ -18,9 +18,17 @@
             <i class="fas fa-lock"></i>
             <h3 class="th-empty-title">{{ __('Not available yet') }}</h3>
             <p class="th-empty-text">{{ $blockedReason }}</p>
-            <a href="{{ route('profile.index') }}" class="th-btn th-btn-ghost">
-                <i class="fas fa-user"></i>{{ __('Profile') }}
-            </a>
+
+            {{-- Only offer the profile when the profile is where the fix is. --}}
+            @if ($blockedKind === 'profile')
+                <a href="{{ route('profile.index') }}" class="th-btn th-btn-ghost">
+                    <i class="fas fa-user"></i>{{ __('Profile') }}
+                </a>
+            @elseif ($blockedKind === 'used')
+                <a href="{{ route('servers.create') }}" class="th-btn th-btn-primary">
+                    <i class="fas fa-plus"></i>{{ __('Create Server') }}
+                </a>
+            @endif
         </div>
     @else
         @if (session('error'))

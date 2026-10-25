@@ -37,6 +37,7 @@ class TrialServerController extends Controller
 
         return view('trial.create', [
             'blockedReason' => $this->trials->blockedReason(Auth::user()),
+            'blockedKind' => $this->trials->blockedKind(Auth::user()),
             'products' => $products,
             // Shipped to the wizard as data so step two can react without a
             // round trip. Only user-facing variables are exposed.

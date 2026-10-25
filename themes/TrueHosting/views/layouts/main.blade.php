@@ -116,10 +116,11 @@
             $canAdmin = Auth::user()->canAny($adminPermissions);
 
             $serverCount = Auth::user()->servers()->count();
-            // Whether the trial is on offer at all; cheap enough to ask each
-            // request, since it is two settings and one product lookup.
-            $trialOffered = app(\App\Services\TrialService::class)->offered()
-                && app(\App\Services\TrialService::class)->blockedReason(Auth::user()) === null;
+            // Whether the operator offers a trial at all. Deliberately not
+            // narrowed to this customer: somebody who has used theirs keeps
+            // the entry and is told so on the page, rather than watching a
+            // menu item vanish with no explanation.
+            $trialOffered = app(\App\Services\TrialService::class)->offered();
 
             $hasCustomPlans = cache()->remember(
                 'th.has_custom_plans',

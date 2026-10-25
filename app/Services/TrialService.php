@@ -77,6 +77,35 @@ class TrialService
     }
 
     /**
+     * What kind of block this is, so the page can offer the right way out.
+     *
+     * 'profile' is something the customer can go and fix; 'used' and
+     * 'closed' are not, and pointing them at their profile would only waste
+     * a click.
+     */
+    public function blockedKind(User $user): ?string
+    {
+        if (!$this->offered()) {
+            return 'closed';
+        }
+
+        if (($this->settings->require_email_verification && !$user->hasVerifiedEmail())
+            || ($this->settings->require_discord_verification && !$user->discordUser)) {
+            return 'profile';
+        }
+
+        if ($this->trialsTaken($user) >= max(1, $this->settings->per_user_limit)) {
+            return 'used';
+        }
+
+        if ($user->servers()->count() >= $user->server_limit) {
+            return 'limit';
+        }
+
+        return null;
+    }
+
+    /**
      * Why this user may not take a trial, or null when they may.
      *
      * Returned as a message rather than a boolean so the wizard can say what
