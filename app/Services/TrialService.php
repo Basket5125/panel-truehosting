@@ -170,6 +170,18 @@ class TrialService
     }
 
     /**
+     * How long a suspended trial is kept before it is removed as well.
+     * 0 means it is kept indefinitely, and it is irrelevant when the trial is
+     * deleted outright.
+     */
+    public function deleteAfterHours(): int
+    {
+        return $this->endAction() === 'suspend'
+            ? max(0, (int) $this->settings->delete_after_hours)
+            : 0;
+    }
+
+    /**
      * Create the trial. Every choice is checked against the settings again
      * here; nothing is taken on trust from the wizard.
      *

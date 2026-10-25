@@ -198,6 +198,9 @@
                                         {{ __('When the time is up the server is removed.') }}
                                     @else
                                         {{ __('When the time is up the server is paused, and buying it later picks up where you left off.') }}
+                                        @if ($deleteAfterHours > 0)
+                                            {{ trans_choice('It is removed :count hour after that.|It is removed :count hours after that.', $deleteAfterHours, ['count' => $deleteAfterHours]) }}
+                                        @endif
                                     @endif
                                 </p>
 

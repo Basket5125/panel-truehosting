@@ -54,6 +54,7 @@ class TrialServerController extends Controller
             'durationHours' => $this->trials->durationHours(),
             'maxExtensions' => $this->trials->maxExtensions(),
             'endAction' => $this->trials->endAction(),
+            'deleteAfterHours' => $this->trials->deleteAfterHours(),
             'requiresCaptcha' => $this->trials->requiresCaptcha(),
             'recaptchaVersion' => $this->generalSettings->recaptcha_version,
             'credits_display_name' => $this->generalSettings->credits_display_name,

@@ -30,6 +30,12 @@ class TrialSettings extends Settings
     /** suspend | delete — what happens once the time is up. */
     public string $end_action = 'suspend';
 
+    /**
+     * With "suspend", how many hours the paused server is kept before it is
+     * removed as well. 0 keeps it for good.
+     */
+    public int $delete_after_hours = 0;
+
     /** How many trials one account may ever take. */
     public int $per_user_limit = 1;
 
@@ -57,6 +63,7 @@ class TrialSettings extends Settings
             'duration_hours' => 'required|integer|min:1|max:8760',
             'max_extensions' => 'required|integer|min:0|max:10',
             'end_action' => 'required|in:suspend,delete',
+            'delete_after_hours' => 'required|integer|min:0|max:8760',
             'per_user_limit' => 'required|integer|min:1|max:100',
             'products' => 'nullable|array',
             'products.*' => 'string',
@@ -111,6 +118,11 @@ class TrialSettings extends Settings
                     'delete' => 'Delete the server',
                 ],
                 'description' => 'Suspending keeps the files, so buying later picks up where the trial left off. Deleting frees the node immediately.',
+            ],
+            'delete_after_hours' => [
+                'label' => 'Then delete it after (hours)',
+                'type' => 'number',
+                'description' => 'Only used when the action above is "suspend": how long the paused server is kept before it is removed too, freeing the node. 0 keeps it indefinitely, so a customer can still buy it months later.',
             ],
             'per_user_limit' => [
                 'label' => 'Trials per account',
