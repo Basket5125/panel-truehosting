@@ -166,6 +166,7 @@ Route::middleware(['auth', 'checkSuspended'])->group(function () {
         Route::get('users/notifications', [UserController::class, 'notifications'])->name('users.notifications.index');
         Route::post('users/notifications', [UserController::class, 'notify'])->name('users.notifications.notify');
         Route::post('users/togglesuspend/{user}', [UserController::class, 'toggleSuspended'])->name('users.togglesuspend');
+        Route::post('users/{user}/trial/reset', [UserController::class, 'resetTrial'])->name('users.trial.reset');
         Route::resource('users', UserController::class);
 
         //servers

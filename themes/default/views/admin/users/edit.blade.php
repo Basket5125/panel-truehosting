@@ -165,6 +165,43 @@
                           </form>
                         </div>
                     </div>
+
+                    {{-- Its own form: the trial counter is not part of the
+                         profile above and is saved on its own. --}}
+                    @if ($trial_enabled)
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    <i class="mr-2 fas fa-flask"></i>{{ __('Trial server') }}
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" action="{{ route('admin.users.trial.reset', $user->id) }}">
+                                    @csrf
+                                    <button type="submit" class="btn btn-warning"
+                                            {{ $trial_used === 0 ? 'disabled' : '' }}>
+                                        <i class="mr-2 fas fa-undo"></i>{{ __('Reset trial limit') }}
+                                    </button>
+                                </form>
+
+                                <p class="mt-2 mb-0">
+                                    @if ($trial_blocked)
+                                        <span class="badge badge-danger">{{ __('Blocked') }}</span>
+                                        <span class="text-muted">
+                                            {{ __('This account cannot take another trial server.') }}
+                                            ({{ $trial_used }}/{{ $trial_limit }})
+                                        </span>
+                                    @else
+                                        <span class="badge badge-success">{{ __('Allowed') }}</span>
+                                        <span class="text-muted">
+                                            {{ __('This account can still take a trial server.') }}
+                                            ({{ $trial_used }}/{{ $trial_limit }})
+                                        </span>
+                                    @endif
+                                </p>
+                            </div>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>

@@ -124,6 +124,42 @@
                             </select>
                         </div>
 
+                        <template x-if="customerVariables().length > 0">
+                            <div class="form-group">
+                                <label>{{ __('Software options') }}</label>
+
+                                <template x-for="variable in customerVariables()" :key="variable.env_variable">
+                                    <div class="th-field">
+                                        <label class="th-label" :for="'var-' + variable.env_variable">
+                                            <span x-text="variable.name"></span>
+                                            <i class="fas fa-info-circle th-hint" x-show="variable.description"
+                                               data-toggle="popover" data-trigger="hover"
+                                               :data-content="variable.description"></i>
+                                        </label>
+
+                                        <template x-if="variableOptions(variable).length > 0">
+                                            <select class="custom-select th-egg-variable"
+                                                    :id="'var-' + variable.env_variable"
+                                                    :data-key="variable.env_variable">
+                                                <template x-for="choice in variableOptions(variable)" :key="choice">
+                                                    <option :value="choice" x-text="choice"
+                                                            :selected="choice === variable.default_value"></option>
+                                                </template>
+                                            </select>
+                                        </template>
+
+                                        <template x-if="variableOptions(variable).length === 0">
+                                            <input type="text" class="form-control th-egg-variable"
+                                                   :id="'var-' + variable.env_variable"
+                                                   :data-key="variable.env_variable"
+                                                   :value="variable.default_value"
+                                                   :placeholder="variable.default_value">
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
                         <div class="form-group mb-0">
                             <label for="billing_priority">
                                 {{ __('Billing Priority') }}
@@ -321,6 +357,8 @@
                 },
 
                 async setEggs() {
+                    this.$nextTick(() => $('[data-toggle="popover"]').popover());
+
                     this.fetchedLocations = false;
                     this.fetchedProducts = false;
                     this.locations = [];
@@ -342,18 +380,53 @@
                     this.updateSelectedObjects()
                 },
 
+                /**
+                 * @description the variables of the chosen specification that
+                 * the egg itself hands to the customer, such as the game
+                 * version. The server accepts no others.
+                 */
+                customerVariables() {
+                    return (this.selectedEggObject.environment ?? [])
+                        .filter(variable => variable.user_viewable && variable.user_editable);
+                },
+
+                /** Values an `in:` rule allows, so a list can be offered. */
+                variableOptions(variable) {
+                    const match = /(?:^|\|)in:([^|]+)/.exec(variable.rules ?? '');
+
+                    return match ? match[1].split(',').map(value => value.trim()).filter(Boolean) : [];
+                },
+
+                /** Whatever the customer typed into the fields above. */
+                collectVariables() {
+                    const values = {};
+
+                    document.querySelectorAll('.th-egg-variable').forEach((field) => {
+                        values[field.dataset.key] = field.value;
+                    });
+
+                    return values;
+                },
+
                 setProduct(productId) {
                     if (!productId) return
 
                     this.selectedProduct = productId;
                     this.updateSelectedObjects();
 
-                    let hasEmptyRequiredVariables = this.hasEmptyRequiredVariables(this.selectedEggObject.environment);
+                    const filled = this.collectVariables();
+
+                    // Only the ones the egg insists on and that are still blank
+                    // need the extra dialog; the rest were asked for inline.
+                    let hasEmptyRequiredVariables = this
+                        .hasEmptyRequiredVariables(this.selectedEggObject.environment)
+                        .filter(variable => !String(filled[variable.env_variable] ?? '').trim());
 
                     if (hasEmptyRequiredVariables.length > 0) {
-                        this.dispatchModal(hasEmptyRequiredVariables);
+                        this.dispatchModal(hasEmptyRequiredVariables, filled);
                     } else {
                         document.getElementById('product').value = productId;
+                        document.getElementById('egg_variables').value = JSON.stringify(filled);
                         document.getElementById('serverForm').submit();
                     }
                 },
@@ -511,7 +584,7 @@
                     return text;
                 },
 
-                dispatchModal(variables) {
+                dispatchModal(variables, alreadyFilled = {}) {
                     const html = variables.map(variable => {
                         const control = variable.rules.includes('in:') ?
                             (() => {
@@ -603,7 +676,7 @@
                             let variables = result.value.variables.reduce((acc, variable) => {
                                 acc[variable.env_variable] = variable.filled_value;
                                 return acc;
-                            }, {});
+                            }, {...alreadyFilled});
 
                             document.getElementById('egg_variables').value = JSON.stringify(variables);
                             document.getElementById('serverForm').submit();

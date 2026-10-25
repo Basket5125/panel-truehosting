@@ -182,12 +182,44 @@ class UserController extends Controller
         $permissions = array_filter($allConstants, fn($key) => str_starts_with($key, 'admin.users.write'));
         $this->checkAnyPermission($permissions);
 
+        $trialSettings = app(\App\Settings\TrialSettings::class);
+        $trialLimit = max(1, (int) $trialSettings->per_user_limit);
+
         $roles = Role::all();
         return view('admin.users.edit')->with([
             'user' => $user,
             'credits_display_name' => $general_settings->credits_display_name,
-            'roles' => $roles
+            'roles' => $roles,
+            'trial_enabled' => $trialSettings->enabled,
+            'trial_limit' => $trialLimit,
+            'trial_used' => (int) $user->trials_used,
+            'trial_blocked' => (int) $user->trials_used >= $trialLimit,
         ]);
+    }
+
+    /**
+     * Let this account take a trial server again.
+     *
+     * The counter lives on the user rather than being derived from their
+     * servers, so clearing it is the only way to give somebody another go —
+     * for instance after a trial that failed through no fault of theirs.
+     */
+    public function resetTrial(User $user): RedirectResponse
+    {
+        $this->checkPermission(self::WRITE_PERMISSION);
+
+        $before = (int) $user->trials_used;
+
+        $user->forceFill(['trials_used' => 0])->save();
+
+        activity()
+            ->performedOn($user)
+            ->causedBy(Auth::user())
+            ->withProperties(['trials_used_before' => $before])
+            ->log('reset the trial server limit');
+
+        return redirect()->route('admin.users.edit', $user->id)
+            ->with('success', __('Trial limit reset.'));
     }
 
     /**

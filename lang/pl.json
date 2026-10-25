@@ -900,5 +900,10 @@
     "When the time is up the server is removed.": "Po upływie czasu serwer zostanie usunięty.",
     "When the time is up the server is paused, and buying it later picks up where you left off.": "Po upływie czasu serwer zostanie wstrzymany, a późniejszy zakup podejmie go dokładnie tam, gdzie skończyłeś.",
     "Costs you": "Kosztuje Cię",
-    "Nothing while the trial runs": "Nic przez czas testu"
+    "Nothing while the trial runs": "Nic przez czas testu",
+    "Reset trial limit": "Resetuj limit serwera testowego",
+    "Blocked": "Zablokowany",
+    "This account cannot take another trial server.": "To konto nie może już utworzyć serwera testowego.",
+    "This account can still take a trial server.": "To konto może jeszcze utworzyć serwer testowy.",
+    "Trial limit reset.": "Limit serwera testowego zresetowany."
 }

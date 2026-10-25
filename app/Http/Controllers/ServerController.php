@@ -268,7 +268,7 @@ class ServerController extends Controller
             'location' => 'required|exists:locations,id',
             'egg' => 'required|exists:eggs,id',
             'product' => 'required|exists:products,id',
-            'egg_variables' => 'nullable|string',
+            'egg_variables' => 'nullable|string|max:8000',
             'billing_priority' => ['nullable', new Enum(BillingPriority::class)],
         ]);
 
