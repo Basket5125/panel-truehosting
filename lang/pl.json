@@ -906,5 +906,9 @@
     "This account cannot take another trial server.": "To konto nie może już utworzyć testowego serwera.",
     "This account can still take a trial server.": "To konto może jeszcze utworzyć testowy serwer.",
     "Trial limit reset.": "Limit testowego serwera zresetowany.",
-    "It is removed :count hour after that.|It is removed :count hours after that.": "Po kolejnej :count godzinie zostanie usunięty.|Po kolejnych :count godzinach zostanie usunięty.|Po kolejnych :count godzinach zostanie usunięty."
+    "It is removed :count hour after that.|It is removed :count hours after that.": "Po kolejnej :count godzinie zostanie usunięty.|Po kolejnych :count godzinach zostanie usunięty.|Po kolejnych :count godzinach zostanie usunięty.",
+    "Discord account linked!": "Konto Discord połączone!",
+    "Discord account linked. You are already on our Discord server, so there was nothing to add.": "Konto Discord połączone. Jesteś już na naszym serwerze Discord, więc nie było nic do dodania.",
+    "Discord account linked, but we could not add you to our Discord server.": "Konto Discord połączone, ale nie udało się dodać Cię do naszego serwera Discord.",
+    "That Discord account is already linked to another account here.": "To konto Discord jest już połączone z innym kontem w panelu."
 }

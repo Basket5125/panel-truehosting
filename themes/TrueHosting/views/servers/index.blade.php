@@ -94,8 +94,17 @@
                             @if ($server->isTrial())
                                 <span class="th-status is-trial">{{ __('Trial') }}</span>
                             @endif
+                            {{-- Object syntax, not a string: a string binding only adds
+                                 classes and leaves whatever was rendered server side in
+                                 place, so a server that finished starting kept its amber
+                                 "starting" background while the label already said
+                                 "running". Each state is toggled explicitly instead. --}}
                             <span class="th-status {{ $stateInfo['class'] }}"
-                                  :class="'th-status ' + cls('{{ $server->id }}')"
+                                  :class="{
+                                      'is-online': cls('{{ $server->id }}') === 'is-online',
+                                      'is-pending': cls('{{ $server->id }}') === 'is-pending',
+                                      'is-suspended': cls('{{ $server->id }}') === 'is-suspended',
+                                  }"
                                   x-text="label('{{ $server->id }}')">{{ $stateInfo['label'] }}</span>
                         </div>
 

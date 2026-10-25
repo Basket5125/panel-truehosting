@@ -23,6 +23,24 @@ class SocialiteController extends Controller
             ->redirect());
     }
 
+    /**
+     * What Discord's answer to "add this member" actually means.
+     *
+     * 201 is a member that was added; 204 is one that was in the server
+     * already, which is the ordinary case for anyone re-linking and is not a
+     * failure — there was simply nothing to do.
+     *
+     * @see https://discord.com/developers/docs/resources/guild#add-guild-member
+     */
+    public static function joinOutcome(int $status): string
+    {
+        if ($status === 204) {
+            return 'already';
+        }
+
+        return $status >= 200 && $status < 300 ? 'joined' : 'failed';
+    }
+
     public function callback(DiscordSettings $discord_settings, UserSettings $user_settings)
     {
         if (Auth::guest()) {
@@ -44,7 +62,7 @@ class SocialiteController extends Controller
             if ($discordLinked !== null) {
                 return redirect()->route('profile.index')->with(
                         'error',
-                        'Discord account already linked!'
+                        __('That Discord account is already linked to another account here.')
                     );
             }
 
@@ -60,8 +78,12 @@ class SocialiteController extends Controller
             $user->discordUser->update($discord->user);
         }
 
-        //force user into discord server
-        //TODO Add event on failure, to notify ppl involved
+        // Put the account into the Discord server. By this point the link
+        // itself has already been made, so whatever happens here the answer is
+        // never a bare "failed" — it says what was and was not done.
+        $joined = 'skipped';
+        $detail = '';
+
         if (! empty($guildId) && ! empty($botToken)) {
             try {
                 $response = Http::withHeaders(
@@ -74,29 +96,56 @@ class SocialiteController extends Controller
                     ['access_token' => $discord->token]
                 );
 
-                if ($response->failed()) {
-                    throw new Exception(
-                        "Discord API error: {$response->status()} - " .
-                        ($response->json('message') ?? 'Unknown error')
-                    );
+                $joined = self::joinOutcome($response->status());
+
+                if ($joined === 'failed') {
+                    $detail = $response->status() . ' ' . (string) ($response->json('message') ?? '');
+
+                    logger()->warning('Could not add the account to the Discord server', [
+                        'user_id' => $user->id,
+                        'discord_id' => $discord->id,
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
                 }
 
-                if (!empty($roleId)) {
-                    $user->discordUser->addOrRemoveRole('add', $roleId);
+                // The role is still wanted when the account was already there;
+                // addOrRemoveRole() reports its own problems and never throws.
+                if ($joined !== 'failed' && !empty($roleId)) {
+                    $user->refresh()->discordUser?->addOrRemoveRole('add', $roleId);
                 }
             } catch (Exception $e) {
-                logger()->error($e->getMessage());
+                $joined = 'failed';
+                $detail = $e->getMessage();
 
-                return redirect()->route('profile.index')->with(
-                    'error',
-                    'Failed to join discord server!'
-                );
+                logger()->error('Discord join threw', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
             }
+        }
+
+        if ($joined === 'failed') {
+            $message = __('Discord account linked, but we could not add you to our Discord server.');
+
+            // The reason only helps whoever can act on it.
+            if ($user->hasRole('Admin') && $detail !== '') {
+                $message .= ' [' . trim($detail) . ']';
+            }
+
+            return redirect()->route('profile.index')->with('warning', $message);
+        }
+
+        if ($joined === 'already') {
+            return redirect()->route('profile.index')->with(
+                'success',
+                __('Discord account linked. You are already on our Discord server, so there was nothing to add.')
+            );
         }
 
         return redirect()->route('profile.index')->with(
             'success',
-            'Discord account linked!'
+            __('Discord account linked!')
         );
     }
 }
