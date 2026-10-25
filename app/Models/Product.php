@@ -175,6 +175,10 @@ class Product extends Model
 
     public function nodes()
     {
-        return $this->belongsToMany(Node::class);
+        // Lower priority is filled first; ties keep a stable order by id.
+        return $this->belongsToMany(Node::class)
+            ->withPivot('priority')
+            ->orderBy('node_product.priority')
+            ->orderBy('nodes.id');
     }
 }

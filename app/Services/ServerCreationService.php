@@ -308,8 +308,18 @@ class ServerCreationService
 
     private function findAvailableNode(string $locationId, Product $product): ?Node
     {
+        // In the order the operator set on the product: a lower priority is
+        // filled first, and nodes left at the same number keep their usual
+        // order, which is how this behaved before priorities existed.
         $nodes = Node::where('location_id', $locationId)
             ->whereHas('products', fn($q) => $q->where('product_id', $product->id))
+            ->leftJoin('node_product', function ($join) use ($product) {
+                $join->on('node_product.node_id', '=', 'nodes.id')
+                    ->where('node_product.product_id', '=', $product->id);
+            })
+            ->orderBy('node_product.priority')
+            ->orderBy('nodes.id')
+            ->select('nodes.*')
             ->get();
 
         $availableNodes = $nodes->reject(function ($node) use ($product) {
@@ -335,6 +345,13 @@ class ServerCreationService
     {
         $nodes = Node::where('location_id', $locationId)
             ->whereHas('products', fn($q) => $q->where('product_id', $product->id))
+            ->leftJoin('node_product', function ($join) use ($product) {
+                $join->on('node_product.node_id', '=', 'nodes.id')
+                    ->where('node_product.product_id', '=', $product->id);
+            })
+            ->orderBy('node_product.priority')
+            ->orderBy('nodes.id')
+            ->select('nodes.*')
             ->get();
 
         $availableNodes = $nodes->reject(function ($node) use ($product) {

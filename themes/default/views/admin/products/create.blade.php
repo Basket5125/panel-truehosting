@@ -377,6 +377,48 @@
                                     </div>
                                 </div>
 
+                                {{-- Which node gets filled first. Shown for every node, not
+                                     only the chosen ones, so a figure is not lost when a node
+                                     is unticked and ticked again. --}}
+                                <div class="form-group">
+                                    <label>
+                                        {{ __('Node priority') }}
+                                        <i data-toggle="popover" data-trigger="hover"
+                                           data-content="{{ __('A lower number is tried first. Nodes with the same number keep their usual order. Only the nodes selected above are used.') }}"
+                                           class="fas fa-info-circle"></i>
+                                    </label>
+
+                                    <table class="table table-sm mb-0">
+                                        <thead>
+                                        <tr>
+                                            <th>{{ __('Node') }}</th>
+                                            <th style="width:8rem">{{ __('Priority') }}</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        @foreach ($locations as $location)
+                                            @foreach ($location->nodes as $node)
+                                                @php
+                                                    $linked = isset($product) ? $product->nodes->firstWhere('id', $node->id) : null;
+                                                @endphp
+                                                <tr>
+                                                    <td>
+                                                        {{ $node->name }}
+                                                        <span class="text-muted">&middot; {{ $location->name }}</span>
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" min="0" max="999"
+                                                               class="form-control form-control-sm"
+                                                               name="node_priority[{{ $node->id }}]"
+                                                               value="{{ old('node_priority.' . $node->id, $linked->pivot->priority ?? 0) }}">
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+
 
                                 <div class="form-group">
                                     <div class="mb-2 d-flex justify-content-between align-items-center">

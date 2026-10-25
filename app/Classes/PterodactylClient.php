@@ -283,6 +283,7 @@ class PterodactylClient implements GamePanelClient
                 'startup' => $egg->startup,
                 'environment' => $this->getEnvironmentVariables($egg, $eggVariables),
                 'oom_disabled' => !$server->product->oom_killer,
+                'oom_killer' => (bool) $server->product->oom_killer,
                 'limits' => [
                     'memory' => $server->product->memory,
                     'swap' => $server->product->swap,
@@ -440,7 +441,8 @@ class PterodactylClient implements GamePanelClient
             'io' => $product->io,
             'cpu' => $product->cpu,
             'threads' => null,
-            'oom_disabled' => !$server->product->oom_killer,
+            'oom_disabled' => !$product->oom_killer,
+            'oom_killer' => (bool) $product->oom_killer,
             'feature_limits' => [
                 'databases' => $product->databases,
                 'backups' => $product->backups,
@@ -468,7 +470,11 @@ class PterodactylClient implements GamePanelClient
                 'io' => $product->io,
                 'cpu' => $product->cpu,
                 'threads' => null,
-                'oom_disabled' => $product->oom_killer,
+                'oom_disabled' => !$product->oom_killer,
+                // FeatherPanel answers these routes too and names the field
+                // the other way round; a panel that does not know this key
+                // ignores it.
+                'oom_killer' => (bool) $product->oom_killer,
                 'feature_limits' => [
                     'databases' => $product->databases,
                     'backups' => $product->backups,

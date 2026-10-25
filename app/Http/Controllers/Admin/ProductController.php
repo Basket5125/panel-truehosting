@@ -93,6 +93,8 @@ class ProductController extends Controller
             'backups' => 'required|numeric|max:1000000|min:0',
             'allocations' => 'required|numeric|max:1000000|min:0',
             'nodes.*' => 'required|exists:nodes,id',
+            'node_priority' => 'nullable|array',
+            'node_priority.*' => 'nullable|integer|min:0|max:999',
             'eggs.*' => 'required|exists:eggs,id',
             'disabled' => 'nullable',
             'oom_killer' => 'nullable',
@@ -107,7 +109,7 @@ class ProductController extends Controller
 
         //link nodes and eggs
         $product->eggs()->attach($request->input('eggs'));
-        $product->nodes()->attach($request->input('nodes'));
+        $product->nodes()->attach($this->nodePivot($request));
 
         return redirect()->route('admin.products.index')->with('success', __('Product has been created!'));
     }
@@ -172,6 +174,8 @@ class ProductController extends Controller
             'backups' => 'required|numeric|max:1000000|min:0',
             'allocations' => 'required|numeric|max:1000000|min:0',
             'nodes.*' => 'required|exists:nodes,id',
+            'node_priority' => 'nullable|array',
+            'node_priority.*' => 'nullable|integer|min:0|max:999',
             'eggs.*' => 'required|exists:eggs,id',
             'disabled' => 'nullable',
             'oom_killer' => 'nullable',
@@ -187,7 +191,7 @@ class ProductController extends Controller
         $product->eggs()->detach();
         $product->nodes()->detach();
         $product->eggs()->attach($request->input('eggs'));
-        $product->nodes()->attach($request->input('nodes'));
+        $product->nodes()->attach($this->nodePivot($request));
 
         return redirect()->route('admin.products.index')->with('success', __('Product has been updated!'));
     }
@@ -212,6 +216,29 @@ class ProductController extends Controller
      * @param  Product  $product
      * @return RedirectResponse
      */
+    /**
+     * Nodes to link, each with the order it should be filled in.
+     *
+     * The form offers a priority for every node, not only the ticked ones, so
+     * a figure survives a node being unticked and ticked again; the ones that
+     * were not chosen are dropped here.
+     *
+     * @return array<int, array<string, int>>
+     */
+    private function nodePivot(Request $request): array
+    {
+        $priorities = (array) $request->input('node_priority', []);
+        $pivot = [];
+
+        foreach ((array) $request->input('nodes', []) as $nodeId) {
+            $pivot[(int) $nodeId] = [
+                'priority' => (int) ($priorities[$nodeId] ?? 0),
+            ];
+        }
+
+        return $pivot;
+    }
+
     public function destroy(Product $product)
     {
         $this->checkPermission(self::DELETE_PERMISSION);
