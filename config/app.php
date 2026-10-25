@@ -62,6 +62,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trusted Proxies
+    |--------------------------------------------------------------------------
+    |
+    | Behind a reverse proxy or a Cloudflare Tunnel the panel is reached over
+    | plain HTTP on loopback while the visitor is on HTTPS. Until the proxy is
+    | trusted, the framework reports the request as http://, which does not
+    | match the https:// links signed into verification e-mails, and every
+    | signature check fails.
+    |
+    | Use "*" when nothing but the proxy can reach the application port, or a
+    | comma separated list of proxy addresses. Left empty, no proxy is trusted.
+    |
+    */
+
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |
