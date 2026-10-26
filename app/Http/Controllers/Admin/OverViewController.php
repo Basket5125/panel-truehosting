@@ -209,26 +209,39 @@ class OverViewController extends Controller
             fn ($result) => is_array($result) && $result !== []
         ) ?? [];
 
-        foreach ($panelServers as $server) { //calculates total of credit usage for each node separately + total
-            $nodeId = $server['attributes']['node'] ?? null;
+        // Loaded once and keyed, instead of two queries per server in the loop.
+        $knownServers = Server::query()->get()->keyBy('pterodactyl_id');
+        $products = Product::query()->get()->keyBy('id');
 
-            // A server on a node this panel no longer lists would otherwise
-            // fatal on the missing key below.
-            if (!isset($nodes[$nodeId])) {
+        foreach ($panelServers as $server) { //calculates total of credit usage for each node separately + total
+            $panelId = $server['attributes']['id'] ?? null;
+            $CPServer = $panelId !== null ? ($knownServers[$panelId] ?? null) : null;
+
+            if (!$CPServer) {
                 continue;
             }
 
-            if ($CPServer = Server::query()->where('pterodactyl_id', $server['attributes']['id'])->first()) {
-                $product = Product::query()->where('id', $CPServer->product_id)->first();
-                $price = $product->getMonthlyPrice();
+            $price = $products[$CPServer->product_id]?->getMonthlyPrice() ?? 0;
+            $nodeId = $server['attributes']['node'] ?? null;
+
+            // The overall totals count every matched server. Only the per-node
+            // breakdown needs the node, and a server on a node this panel no
+            // longer lists must not be dropped from the totals because of it —
+            // that mismatch is what the warning below is built on.
+            if (! $CPServer->suspended) {
+                $counters['earnings']->active += $price;
+                $counters['servers']->active++;
+            }
+
+            $counters['earnings']->total += $price;
+            $counters['servers']->total++;
+
+            if (isset($nodes[$nodeId])) {
                 if (! $CPServer->suspended) {
-                    $counters['earnings']->active += $price;
-                    $counters['servers']->active++;
                     $nodes[$nodeId]->activeEarnings += $price;
                     $nodes[$nodeId]->activeServers++;
                 }
-                $counters['earnings']->total += $price;
-                $counters['servers']->total++;
+
                 $nodes[$nodeId]->totalEarnings += $price;
                 $nodes[$nodeId]->totalServers++;
             }
@@ -266,7 +279,12 @@ class OverViewController extends Controller
             'syncLastUpdate' => $syncLastUpdate,
             'panelReachable' => $panelReachable,
             'deletedNodesPresent' => $panelReachable && $DBnodes->count() != count($pteroNodeIds),
-            'perPageLimit' => $panelReachable && $counters['servers']->total != Server::query()->count(),
+            // How many servers this panel holds that the game panel did not
+            // list. The old flag called every mismatch a "perPage limit",
+            // which is only one of the reasons and rarely the real one.
+            'unmatchedServers' => $panelReachable
+                ? max(0, $knownServers->count() - $counters['servers']->total)
+                : 0,
             'tickets' => $tickets,
             'credits_display_name' => $general_settings->credits_display_name
         ]);

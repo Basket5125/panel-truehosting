@@ -270,14 +270,18 @@
                             </div>
                         </div>
                         <div class="py-1 card-body">
-                            @if ($perPageLimit)
-                                <div class="m-2 alert alert-danger">
-                                    <h5><i class="icon fas fa-exclamation-circle"></i>{{ __('Error!') }}</h5>
+                            {{-- A warning, not an error: the figures are simply short by
+                                 this many servers, and it says why that happens. --}}
+                            @if ($unmatchedServers > 0)
+                                <div class="m-2 alert alert-warning">
+                                    <h5><i class="icon fas fa-exclamation-triangle"></i>{{ __('Some servers are missing from these figures') }}</h5>
                                     <p class="mb-2">
-                                        {{ __('You reached the Pterodactyl perPage limit. Please make sure to set it higher than your server count.') }}<br>
-                                        {{ __('You can do that in settings.') }}<br><br>
-                                        {{ __('Note') }}:
-                                        {{ __('If this error persists even after changing the limit, it might mean a server was deleted on Pterodactyl, but not on CtrlPanel. Try clicking the button below.') }}
+                                        {{ trans_choice(
+                                            ':count server here was not listed by the game panel, so it is left out of the counts below.|:count servers here were not listed by the game panel, so they are left out of the counts below.',
+                                            $unmatchedServers,
+                                            ['count' => $unmatchedServers]
+                                        ) }}<br><br>
+                                        {{ __('Usually one of three things: the server was removed on the game panel but not here, it never finished being created, or the panel returns fewer servers per page than you have. The last one is the "per page limit" in the game panel settings.') }}
                                     </p>
                                     <a href="{{ route('admin.servers.sync') }}" class="btn btn-primary btn-md"><i
                                             class="mr-2 fas fa-sync"></i>{{ __('Sync servers') }}</a>
