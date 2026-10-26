@@ -6,6 +6,7 @@ use App\Events\UserUpdateCreditsEvent;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Notifications\DynamicNotification;
+use App\Services\PanelUserSync;
 use App\Settings\LocaleSettings;
 use App\Settings\PterodactylSettings;
 use App\Contracts\GamePanelClient;
@@ -22,6 +23,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
@@ -220,6 +222,74 @@ class UserController extends Controller
 
         return redirect()->route('admin.users.edit', $user->id)
             ->with('success', __('Trial limit reset.'));
+    }
+
+    /**
+     * Check every account here against the game panel and create the ones it
+     * does not have.
+     *
+     * Registration makes both sides at once, so this is a repair rather than a
+     * routine: it matters after the panel was down, rebuilt or swapped, when a
+     * customer looks fine until the moment they try to buy a server.
+     */
+    public function syncPanel(PanelUserSync $sync): RedirectResponse
+    {
+        $this->checkAnyPermission([self::CHANGE_PTERO_PERMISSION, self::WRITE_PERMISSION]);
+
+        // One run at a time. Two admins clicking together would each read the
+        // panel before the other wrote to it, and both would create the same
+        // missing accounts.
+        $lock = Cache::lock('panel_user_sync', 600);
+
+        if (!$lock->get()) {
+            return redirect()->route('admin.users.index')
+                ->with('warning', __('A synchronisation is already running. Give it a moment.'));
+        }
+
+        try {
+            $result = $sync->run();
+        } catch (\Throwable $e) {
+            Log::error('User synchronisation failed', ['error' => $e->getMessage()]);
+
+            return redirect()->route('admin.users.index')->with(
+                'error',
+                __('Could not read the accounts from :panel, so nothing was changed.', [
+                    'panel' => $this->pterodactyl->panelName(),
+                ]) . ' [' . $e->getMessage() . ']'
+            );
+        } finally {
+            $lock->release();
+        }
+
+        activity()
+            ->causedBy(Auth::user())
+            ->withProperties($result)
+            ->log('synchronised users with the game panel');
+
+        $summary = __('Checked :checked accounts on :panel: :matched already there, :relinked linked up, :created created.', [
+            'panel' => $result['panel'],
+            'checked' => $result['checked'],
+            'matched' => $result['matched'],
+            'relinked' => $result['relinked'],
+            'created' => $result['created'],
+        ]);
+
+        if ($result['passwords_issued']) {
+            // Nothing here knows anyone's real password — it is only ever
+            // held hashed — so a new panel account gets a random one.
+            $summary .= ' ' . __('New accounts were given a random password; their owners set their own by changing their password in their profile.');
+        }
+
+        $redirect = redirect()->route('admin.users.index')->with('success', $summary);
+
+        if ($result['failed'] > 0) {
+            // Plain text, not markup: the flash is rendered escaped, so a <br>
+            // would show up as one.
+            $redirect->with('error', __('Could not create :count of them.', ['count' => $result['failed']])
+                . ' ' . implode(' | ', array_slice($result['failures'], 0, 10)));
+        }
+
+        return $redirect;
     }
 
     /**

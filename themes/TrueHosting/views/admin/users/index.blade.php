@@ -42,6 +42,20 @@
                                     </button>
                                 </form>
                             @endcan
+                            @canany(['admin.users.write.pterodactyl', 'admin.users.write'])
+                                {{-- A repair, not a routine: it matters after the game
+                                     panel was down, rebuilt or swapped, when an account
+                                     here has none over there and the customer only finds
+                                     out when they try to buy a server. --}}
+                                <form id="panelSyncForm" method="POST" action="{{ route('admin.users.sync') }}"
+                                      class="d-inline">
+                                    @csrf
+                                    <button type="submit" id="panelSyncButton" class="th-btn th-btn-ghost th-btn-sm"
+                                            title="{{ __('Check every account against the game panel and create the missing ones.') }}">
+                                        <i class="mr-1 fas fa-sync" id="panelSyncIcon"></i>{{ __('Synchronise') }}
+                                    </button>
+                                </form>
+                            @endcanany
                             <a href="{{ route('admin.users.notifications.index') }}" class="th-btn th-btn-ghost th-btn-sm"><i
                                     class="mr-1 fas fa-paper-plane"></i>{{ __('Notify') }}</a>
                         </div>
@@ -221,6 +235,29 @@
                 if (selected.size === 0 || !confirm(question + ' (' + selected.size + ')')) {
                     e.preventDefault();
                 }
+            });
+        })();
+    </script>
+
+    <script>
+        // The sync talks to the game panel once per missing account, so it can
+        // take a while. Without this the button looks dead and gets clicked
+        // again, which the server-side lock then has to refuse.
+        (function () {
+            const form = document.getElementById('panelSyncForm');
+            if (!form) return;
+
+            form.addEventListener('submit', function (e) {
+                if (!confirm('{{ __('Check every account against the game panel and create the missing ones?') }}')) {
+                    e.preventDefault();
+                    return;
+                }
+
+                const button = document.getElementById('panelSyncButton');
+                const icon = document.getElementById('panelSyncIcon');
+
+                if (icon) icon.classList.add('fa-spin');
+                if (button) button.disabled = true;
             });
         })();
     </script>

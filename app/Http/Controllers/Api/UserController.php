@@ -304,8 +304,19 @@ class UserController extends Controller
                 ]);
             }
 
+            $panelUserId = $response->json()['attributes']['id'] ?? null;
+
+            if (!$panelUserId) {
+                // Without it the account here has no counterpart on the panel
+                // and cannot own a server, so the whole thing is rolled back
+                // rather than half-made.
+                throw ValidationException::withMessages([
+                    'pterodactyl_error_message' => __('The panel accepted the account but did not say which one it created.'),
+                ]);
+            }
+
             $user->update([
-                'pterodactyl_id' => $response->json()['attributes']['id'],
+                'pterodactyl_id' => $panelUserId,
             ]);
 
             $user->sendEmailVerificationNotification();

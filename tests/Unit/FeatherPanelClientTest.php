@@ -316,4 +316,76 @@ class FeatherPanelClientTest extends TestCase
         // survive the translation.
         $this->assertSame(404, $response->status());
     }
+
+    /* ---------------------------------------------------------------------
+     | Accounts
+     * ------------------------------------------------------------------- */
+
+    public function test_users_are_translated_and_listed(): void
+    {
+        Http::fake(['*/api/admin/users*' => Http::response($this->envelope([
+            'users' => [
+                ['id' => 5, 'username' => 'kowalski', 'email' => 'jan@example.com', 'uuid' => 'u-5'],
+            ],
+            'pagination' => ['has_next' => false],
+        ]))]);
+
+        $users = $this->client()->getUsers();
+
+        $this->assertSame(5, $users[0]['attributes']['id']);
+        $this->assertSame('jan@example.com', $users[0]['attributes']['email']);
+    }
+
+    public function test_a_created_account_is_answered_in_pterodactyls_envelope(): void
+    {
+        Http::fake(['*/api/admin/users' => Http::response($this->envelope([
+            'user' => ['id' => 5, 'username' => 'kowalski', 'email' => 'jan@example.com'],
+        ]))]);
+
+        $response = $this->client()->createUser([
+            'username' => 'kowalski',
+            'email' => 'jan@example.com',
+            'password' => 'secret-enough',
+        ]);
+
+        // Registration and the API both read the new id from here.
+        $this->assertSame(5, $response->json()['attributes']['id']);
+    }
+
+    public function test_a_create_reply_without_the_account_is_read_back_by_email(): void
+    {
+        Http::fake([
+            // The search for the address answers; the write only acknowledges.
+            '*/api/admin/users?*' => Http::response($this->envelope([
+                'users' => [['id' => 5, 'username' => 'kowalski', 'email' => 'jan@example.com']],
+                'pagination' => ['has_next' => false],
+            ])),
+            '*/api/admin/users' => Http::response(['success' => true]),
+        ]);
+
+        $response = $this->client()->createUser([
+            'username' => 'kowalski',
+            'email' => 'jan@example.com',
+            'password' => 'secret-enough',
+        ]);
+
+        $this->assertSame(5, $response->json()['attributes']['id']);
+    }
+
+    public function test_a_refused_account_is_handed_back_with_its_own_status(): void
+    {
+        Http::fake([
+            '*/api/admin/users' => Http::response(['success' => false, 'error_message' => 'Email taken'], 422),
+        ]);
+
+        $response = $this->client()->createUser([
+            'username' => 'kowalski',
+            'email' => 'jan@example.com',
+            'password' => 'secret-enough',
+        ]);
+
+        $this->assertTrue($response->failed());
+        $this->assertSame(422, $response->status());
+        $this->assertSame('Email taken', $response->json()['error_message']);
+    }
 }

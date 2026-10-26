@@ -800,7 +800,92 @@ class FeatherPanelClient implements GamePanelClient
 
     public function createUser(array $data)
     {
-        return $this->application->put('admin/users', $data);
+        $response = $this->application->put('admin/users', $data);
+
+        if ($response->failed()) {
+            // Untouched, so the caller can report the panel's own complaint.
+            return $response;
+        }
+
+        // Callers read the new account's id out of Pterodactyl's envelope. A
+        // reply handed over untranslated is how a user ends up registered here
+        // with no account on the panel recorded against them.
+        $created = $this->readUser($response);
+
+        if (empty($created['id']) && !empty($data['email'])) {
+            // Some replies only acknowledge the write, so the account is read
+            // back by the address it was created with.
+            $created = $this->findUserByEmail((string) $data['email']) ?? [];
+        }
+
+        if (empty($created['id'])) {
+            throw $this->getException('The panel accepted the account but did not say which one it created.');
+        }
+
+        return PanelResponse::attributes($created, 'user');
+    }
+
+    /**
+     * A user reply mapped to Pterodactyl's field names, or an empty array when
+     * it did not hold one.
+     *
+     * @return array<string, mixed>
+     */
+    private function readUser(Response $response): array
+    {
+        try {
+            $data = $this->unwrap($response, 'Failed to read user');
+        } catch (Exception $e) {
+            return [];
+        }
+
+        $record = $data['user'] ?? $data;
+
+        return isset($record['id']) ? $this->mapUser($record) : [];
+    }
+
+    /**
+     * The panel account registered to an address, if there is one.
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws Exception
+     */
+    private function findUserByEmail(string $email): ?array
+    {
+        // One request, not a walk of the whole list: a panel that ignores the
+        // search parameter would otherwise have every page of its users pulled
+        // through here just to read one back.
+        try {
+            $response = $this->application->get('admin/users', [
+                'search' => $email,
+                'page' => 1,
+                'limit' => 25,
+            ]);
+        } catch (Exception $e) {
+            return null;
+        }
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        $rows = $this->unwrap($response, 'Failed to search users')['users'] ?? [];
+
+        foreach ((array) $rows as $row) {
+            // The search is the panel's; the comparison is ours, because a
+            // loose match would otherwise hand back somebody else's account.
+            if (is_array($row) && isset($row['email']) && strcasecmp((string) $row['email'], $email) === 0) {
+                return $this->mapUser($row);
+            }
+        }
+
+        return null;
+    }
+
+    public function getUsers()
+    {
+        return $this->wrap($this->collect('admin/users', 'users'), fn ($u) => $this->mapUser($u));
     }
 
     public function getUser(int $panelUserId)

@@ -373,6 +373,47 @@ class PterodactylClient implements GamePanelClient
     }
 
     /**
+     * Every account on the panel, paged through to the end.
+     *
+     * The single-page reads elsewhere in this class stop at the per-page limit,
+     * which is exactly how a sync comparing two sides ends up believing
+     * accounts are missing when they are only on page two.
+     *
+     * @return array<int, array{attributes: array<string, mixed>}>
+     *
+     * @throws Exception
+     */
+    public function getUsers()
+    {
+        $users = [];
+        $page = 1;
+
+        do {
+            try {
+                $response = $this->application->get('application/users', [
+                    'per_page' => $this->per_page_limit,
+                    'page' => $page,
+                ]);
+            } catch (Exception $e) {
+                throw self::getException($e->getMessage());
+            }
+
+            if ($response->failed()) {
+                throw self::getException('Failed to get the list of users - ', $response->status());
+            }
+
+            $body = $response->json();
+            $users = array_merge($users, $body['data'] ?? []);
+
+            $meta = $body['meta']['pagination'] ?? [];
+            $lastPage = (int) ($meta['total_pages'] ?? 1);
+            $page++;
+        } while ($page <= $lastPage && $page <= 500);
+
+        return $users;
+    }
+
+    /**
      * Update user on Pterodactyl
      *
      * @param int $pterodactylId

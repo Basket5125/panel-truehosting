@@ -53,6 +53,14 @@ interface GamePanelClient
 
     public function getUser(int $panelUserId);
 
+    /**
+     * Every account the panel knows, wrapped the way Pterodactyl wraps a
+     * collection: a list of ['attributes' => [...]].
+     *
+     * @return array<int, array{attributes: array<string, mixed>}>
+     */
+    public function getUsers();
+
     public function updateUser(int $panelUserId, array $data);
 
     public function getServerAttributes(?int $panelServerId, bool $deleteOn404 = false);

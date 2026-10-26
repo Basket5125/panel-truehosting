@@ -126,26 +126,41 @@ class RegisterController extends Controller
      */
     protected function create(array $data)
     {
-        $response = $this->pterodactylClient->application->post('/application/users', [
-            'external_id' => null,
-            'username' => $data['name'],
-            'email' => $data['email'],
-            'first_name' => $data['name'],
-            'last_name' => $data['name'],
-            'password' => $data['password'],
-            'root_admin' => false,
-            'language' => 'en',
-        ]);
-        
-        if ($response->failed()) {
-            Log::error('Pterodactyl Registration Error: ' . ($response->json()['errors'][0]['detail'] ?? 'Unknown error'));
+        // Through the driver, not its HTTP client: reaching past it hard-codes
+        // Pterodactyl's route and envelope, so registration silently stopped
+        // recording the panel account whenever another panel was configured.
+        try {
+            $response = $this->pterodactylClient->createUser([
+                'external_id' => null,
+                'username' => $data['name'],
+                'email' => $data['email'],
+                'first_name' => $data['name'],
+                'last_name' => $data['name'],
+                'password' => $data['password'],
+                'root_admin' => false,
+                'language' => 'en',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Registration: the game panel refused the account', ['error' => $e->getMessage()]);
             throw ValidationException::withMessages([
                 'ptero_registration_error' => [__('Failed to create account on Pterodactyl. Please contact Support!')],
             ]);
         }
 
-        if (!isset($response->json()['attributes']['id'])) {
-            Log::error('Pterodactyl Registration Error: Missing user ID in response');
+        if ($response->failed()) {
+            Log::error('Registration: the game panel refused the account', [
+                'status' => $response->status(),
+                'error' => $response->json()['errors'][0]['detail'] ?? $response->json()['error_message'] ?? 'Unknown error',
+            ]);
+            throw ValidationException::withMessages([
+                'ptero_registration_error' => [__('Failed to create account on Pterodactyl. Please contact Support!')],
+            ]);
+        }
+
+        $panelUserId = $response->json()['attributes']['id'] ?? null;
+
+        if (!$panelUserId) {
+            Log::error('Registration: the game panel did not say which account it created');
             throw ValidationException::withMessages([
                 'ptero_registration_error' => [__('Failed to create account on Pterodactyl. Please contact Support!')],
             ]);
@@ -158,7 +173,7 @@ class RegisterController extends Controller
             'server_limit' => $this->userSettings->initial_server_limit,
             'password' => Hash::make($data['password']),
             'referral_code' => $this->createReferralCode(),
-            'pterodactyl_id' => $response->json()['attributes']['id'],
+            'pterodactyl_id' => $panelUserId,
         ]);
 
         $user->syncRoles(Role::findById(4));
