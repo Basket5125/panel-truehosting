@@ -325,6 +325,9 @@
                 timer: null,
 
                 start() {
+                    // Nothing to poll for when the list is empty.
+                    if (Object.keys(this.states).length === 0) return;
+
                     this.timer = setInterval(() => this.refresh(), INTERVAL);
 
                     // A tab nobody is looking at does not need fresh figures,
@@ -346,8 +349,15 @@
                     return this.pending[id] === true;
                 },
 
+                stop() {
+                    if (this.timer) {
+                        clearInterval(this.timer);
+                        this.timer = null;
+                    }
+                },
+
                 async refresh() {
-                    if (document.hidden) return;
+                    if (document.hidden || !this.timer) return;
 
                     try {
                         const response = await axios.get('{{ route('servers.states') }}');
@@ -357,7 +367,15 @@
                             if (!this.busy(id)) this.states[id] = response.data[id];
                         });
                     } catch (e) {
-                        // A dropped poll is not worth telling anyone about.
+                        // Once the session is gone every poll would be refused,
+                        // and each refusal is written to the server's log. Give
+                        // up instead of filling it from a forgotten tab.
+                        const status = e.response?.status;
+
+                        if (status === 401 || status === 419 || status === 403) {
+                            this.stop();
+                        }
+                        // Any other dropped poll is not worth telling anyone about.
                     }
                 },
 

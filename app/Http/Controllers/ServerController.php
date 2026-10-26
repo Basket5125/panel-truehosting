@@ -449,8 +449,16 @@ class ServerController extends Controller
             $server->state = $serverInfo['status'] ?? null;
 
             if (isset($serverInfo['name']) && $server->name !== $serverInfo['name']) {
+                // Only the name is a real column. Everything set above —
+                // location, egg, nest, node, address, state — exists for the
+                // view alone, and save() would try to write all of them,
+                // which fails with "Unknown column 'location'" and loses the
+                // rename with it.
+                $server->newQuery()->whereKey($server->getKey())
+                    ->update(['name' => $serverInfo['name']]);
+
                 $server->name = $serverInfo['name'];
-                $server->save();
+                $server->syncOriginalAttribute('name');
             }
 
             if ($server->product_id) {

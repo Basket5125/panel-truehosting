@@ -131,6 +131,13 @@
                             </div>
                         </div>
                         <div class="py-1 card-body">
+                            @if (!$panelReachable)
+                                <div class="alert alert-warning">
+                                    <h5><i class="icon fas fa-plug"></i>{{ __('Game panel unreachable') }}</h5>
+                                    {{ __('The node and server figures below could not be read from the game panel, so they are incomplete. Check the panel URL and API keys in the settings.') }}
+                                </div>
+                            @endif
+
                             @if ($deletedNodesPresent)
                                 <div class="m-2 alert alert-danger">
                                     <h5><i class="icon fas fa-exclamation-circle"></i>{{ __('Warning!') }}</h5>

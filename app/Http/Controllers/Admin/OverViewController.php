@@ -148,10 +148,25 @@ class OverViewController extends Controller
         $lastEgg = Egg::query()->latest('updated_at')->first();
         $syncLastUpdate = $lastEgg ? $lastEgg->updated_at->isoFormat('LLL') : __('unknown');
 
-        //Get node information and prepare collection
+        // Node and server data, asking the other panel when the configured one
+        // cannot answer — otherwise every node reads as 0% used and the page
+        // claims servers are missing that are in fact there.
+        $fallback = new \App\Services\GamePanelFallback($this->pterodactyl);
+
+        $panelNodes = $fallback->value(
+            fn ($client) => $client->getNodes(),
+            'overview:nodes',
+            fn ($result) => is_array($result) && $result !== []
+        ) ?? [];
+
+        // Whether the panel answered at all. Without this, an unreachable
+        // panel looks identical to one that has had every node and server
+        // deleted, and the page shouts about problems that do not exist.
+        $panelReachable = $panelNodes !== [];
+
         $pteroNodeIds = [];
-        foreach ($this->pterodactyl->getNodes() as $pteroNode) {
-            array_push($pteroNodeIds, $pteroNode['attributes']['id']);
+        foreach ($panelNodes as $pteroNode) {
+            $pteroNodeIds[] = $pteroNode['attributes']['id'];
         }
         $nodes = collect();
         foreach ($DBnodes = Node::query()->get() as $DBnode) { //gets all node information and prepares the structure
@@ -163,7 +178,7 @@ class OverViewController extends Controller
             $nodes[$nodeId]->name = $DBnode['name'];
             // Not every panel reports node capacity (FeatherPanel does not),
             // and a node with no limits set would divide by zero.
-            $capacity = $this->pterodactyl->getNodeCapacity($nodeId);
+            $capacity = $fallback->capacity($nodeId, 60);
             $nodes[$nodeId]->usagePercent = 0;
 
             if ($capacity && $capacity['memory'] > 0 && $capacity['disk'] > 0) {
@@ -181,8 +196,20 @@ class OverViewController extends Controller
         }
         $counters['totalUsagePercent'] = ($DBnodes->count()) ? round($counters['totalUsagePercent'] / $DBnodes->count(), 2) : 0;
 
-        foreach ($this->pterodactyl->getServers() as $server) { //gets all servers from Pterodactyl and calculates total of credit usage for each node separately + total
+        $panelServers = $fallback->value(
+            fn ($client) => $client->getServers(),
+            'overview:servers',
+            fn ($result) => is_array($result) && $result !== []
+        ) ?? [];
+
+        foreach ($panelServers as $server) { //calculates total of credit usage for each node separately + total
             $nodeId = $server['attributes']['node'];
+
+            // A server on a node this panel no longer lists would otherwise
+            // fatal on the missing key below.
+            if (!isset($nodes[$nodeId])) {
+                continue;
+            }
 
             if ($CPServer = Server::query()->where('pterodactyl_id', $server['attributes']['id'])->first()) {
                 $product = Product::query()->where('id', $CPServer->product_id)->first();
@@ -230,8 +257,9 @@ class OverViewController extends Controller
             'counters' => $counters,
             'nodes' => $nodes,
             'syncLastUpdate' => $syncLastUpdate,
-            'deletedNodesPresent' => ($DBnodes->count() != count($pteroNodeIds)) ? true : false,
-            'perPageLimit' => ($counters['servers']->total != Server::query()->count()) ? true : false,
+            'panelReachable' => $panelReachable,
+            'deletedNodesPresent' => $panelReachable && $DBnodes->count() != count($pteroNodeIds),
+            'perPageLimit' => $panelReachable && $counters['servers']->total != Server::query()->count(),
             'tickets' => $tickets,
             'credits_display_name' => $general_settings->credits_display_name
         ]);

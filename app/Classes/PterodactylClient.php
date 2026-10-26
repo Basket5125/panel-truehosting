@@ -558,22 +558,19 @@ class PterodactylClient implements GamePanelClient
      */
     public function checkNodeResources(Node $node, int $requireMemory, int $requireDisk)
     {
-        try {
-            $response = $this->application->get("application/nodes/{$node->id}");
-        } catch (Exception $e) {
-            throw self::getException($e->getMessage());
-        }
-        $node = $response['attributes'];
-        $freeMemory = ($node['memory'] * ($node['memory_overallocate'] + 100) / 100) - $node['allocated_resources']['memory'];
-        $freeDisk = ($node['disk'] * ($node['disk_overallocate'] + 100) / 100) - $node['allocated_resources']['disk'];
-        if ($freeMemory < $requireMemory) {
-            return false;
-        }
-        if ($freeDisk < $requireDisk) {
-            return false;
+        // Through getNodeCapacity(), which copes with panels that report usage
+        // differently. Reading `allocated_resources` straight off the node, as
+        // this used to, silently treated a missing key as zero usage — so a
+        // full node looked empty and accepted servers the panel then refused.
+        $capacity = $this->getNodeCapacity($node->id);
+
+        if ($capacity === null) {
+            // Unknown, not unlimited. The caller decides what to do with that.
+            return true;
         }
 
-        return true;
+        return ($capacity['memory'] - $capacity['used_memory']) >= $requireMemory
+            && ($capacity['disk'] - $capacity['used_disk']) >= $requireDisk;
     }
 
     public function getNodeCapacity($nodeId): ?array

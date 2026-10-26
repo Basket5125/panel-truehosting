@@ -10,6 +10,7 @@ use App\Models\Pterodactyl\Node;
 use App\Jobs\PostServerCreationJob;
 use App\Jobs\ReconcileServerCreationJob;
 use App\Services\CreditService;
+use App\Services\GamePanelFallback;
 use App\Settings\GeneralSettings;
 use App\Settings\PterodactylSettings;
 use App\Settings\ServerSettings;
@@ -276,6 +277,20 @@ class ServerCreationService
                     $this->refundCredits($user, $chargedPrice);
                 }
 
+                // The panel has just told us this server is not there. Leaving
+                // the record behind puts a server in the customer's list that
+                // does not exist anywhere, which is worse than no record at
+                // all — and they have their money back. Deleted through the
+                // query builder on purpose: the model's delete hook would ask
+                // the panel to remove a server it has already said is absent.
+                Server::where('id', $server->id)->delete();
+
+                logger()->notice('Removed the record of a server the panel never created', [
+                    'server_id' => $server->id,
+                    'user_id' => $user->id,
+                    'refunded' => $updated === 1 ? $chargedPrice : 0,
+                ]);
+
                 return $server;
             }
 
@@ -325,9 +340,25 @@ class ServerCreationService
             ->select('nodes.*')
             ->get();
 
-        $availableNodes = $nodes->reject(function ($node) use ($product) {
-            // Check if node has enough memory and disk resources
-            if (!$this->pterodactylClient->checkNodeResources($node, $product->memory, $product->disk)) {
+        // Asking both panels about capacity: the configured one may not be
+        // able to measure, and treating "cannot tell" as "plenty of room"
+        // created servers the panel then refused, leaving an empty record
+        // behind in the panel.
+        $fallback = new GamePanelFallback($this->pterodactylClient);
+
+        $availableNodes = $nodes->reject(function ($node) use ($product, $fallback) {
+            $capacity = $fallback->capacity((int) $node->id);
+
+            if ($capacity !== null) {
+                $roomForMemory = ($capacity['memory'] - $capacity['used_memory']) >= $product->memory;
+                $roomForDisk = ($capacity['disk'] - $capacity['used_disk']) >= $product->disk;
+
+                if (!$roomForMemory || !$roomForDisk) {
+                    return true;
+                }
+            } elseif (!$this->pterodactylClient->checkNodeResources($node, $product->memory, $product->disk)) {
+                // Neither panel could measure it; fall back to the driver's
+                // own answer rather than refusing every node outright.
                 return true;
             }
 

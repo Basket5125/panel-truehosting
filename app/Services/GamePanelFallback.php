@@ -98,6 +98,101 @@ class GamePanelFallback
         return ['response' => $response ?? $second, 'client' => $this->primary, 'fell_back' => false];
     }
 
+    /**
+     * Run $call for a value rather than a response, trying the other panel
+     * when the first cannot produce one.
+     *
+     * Used by the pages that read node and server data: a driver that throws,
+     * or that simply does not know, must not leave the operator looking at
+     * zeroes as though everything were idle.
+     *
+     * @template T
+     * @param  callable(GamePanelClient): T  $call
+     * @param  callable(T): bool|null  $usable  when the first answer is good enough
+     * @return T|null
+     */
+    public function value(callable $call, string $what, ?callable $usable = null)
+    {
+        $usable ??= fn ($result) => $result !== null;
+
+        try {
+            $result = $call($this->primary);
+
+            if ($usable($result)) {
+                return $result;
+            }
+        } catch (Throwable $e) {
+            Log::warning('Game panel call threw', [
+                'what' => $what,
+                'panel' => $this->primary->panelName(),
+                'error' => $e->getMessage(),
+            ]);
+
+            $result = null;
+        }
+
+        $alternate = $this->alternate();
+
+        if ($alternate === null) {
+            return $result;
+        }
+
+        try {
+            $second = $call($alternate);
+
+            if ($usable($second)) {
+                Log::info('Read from the other game panel instead', [
+                    'what' => $what,
+                    'from' => $this->primary->panelName(),
+                    'to' => $alternate->panelName(),
+                ]);
+
+                return $second;
+            }
+        } catch (Throwable $e) {
+            Log::warning('Fallback game panel call threw', [
+                'what' => $what,
+                'panel' => $alternate->panelName(),
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * How much of a node is in use, asking both panels before giving up.
+     *
+     * @return array{memory: int, disk: int, used_memory: int, used_disk: int}|null
+     */
+    public function capacity(int $nodeId, int $cacheSeconds = 0): ?array
+    {
+        if ($cacheSeconds > 0) {
+            // The overview asks about every node on every page load. Capacity
+            // does not move by the second, so a short cache spares the panel a
+            // burst of requests. Server creation passes 0 and always measures.
+            return \Illuminate\Support\Facades\Cache::remember(
+                'th.node_capacity.' . $nodeId,
+                $cacheSeconds,
+                fn () => $this->readCapacity($nodeId)
+            );
+        }
+
+        return $this->readCapacity($nodeId);
+    }
+
+    /** @return array{memory: int, disk: int, used_memory: int, used_disk: int}|null */
+    private function readCapacity(int $nodeId): ?array
+    {
+        return $this->value(
+            fn (GamePanelClient $client) => $client->getNodeCapacity($nodeId),
+            'capacity:' . $nodeId,
+            fn ($result) => is_array($result)
+                && ($result['memory'] ?? 0) > 0
+                && ($result['disk'] ?? 0) > 0
+        );
+    }
+
     /** @return \Illuminate\Http\Client\Response|null */
     private function run(callable $call, GamePanelClient $client, string $what)
     {

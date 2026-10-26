@@ -136,6 +136,43 @@ class Server extends Model
         });
     }
 
+    /**
+     * Details read from the game panel for display only: the location, egg,
+     * nest and node names, the connection address and the live power state.
+     *
+     * They are deliberately kept out of `$attributes`. Assigning an unknown
+     * property to an Eloquent model otherwise makes it look like a column, and
+     * the next save() tries to write it — which is what produced
+     * "Unknown column 'location'" and silently lost the rename it was meant
+     * to persist.
+     *
+     * @var array<string, mixed>
+     */
+    protected array $panelInfo = [];
+
+    /** @var array<int, string> */
+    public const PANEL_INFO_FIELDS = ['location', 'egg', 'nest', 'node', 'address', 'state'];
+
+    public function setAttribute($key, $value)
+    {
+        if (in_array($key, self::PANEL_INFO_FIELDS, true)) {
+            $this->panelInfo[$key] = $value;
+
+            return $this;
+        }
+
+        return parent::setAttribute($key, $value);
+    }
+
+    public function getAttribute($key)
+    {
+        if (in_array($key, self::PANEL_INFO_FIELDS, true)) {
+            return $this->panelInfo[$key] ?? null;
+        }
+
+        return parent::getAttribute($key);
+    }
+
     /** A free trial server, which expires instead of being billed. */
     public function isTrial(): bool
     {
