@@ -22,8 +22,14 @@ use Throwable;
  */
 class GamePanelFallback
 {
-    public function __construct(private GamePanelClient $primary)
-    {
+    /**
+     * @param  GamePanelClient|null  $alternate  the other panel, when the caller
+     *         already has one; otherwise it is worked out from the settings.
+     */
+    public function __construct(
+        private GamePanelClient $primary,
+        private ?GamePanelClient $alternate = null,
+    ) {
     }
 
     /**
@@ -32,6 +38,10 @@ class GamePanelFallback
      */
     public function alternate(): ?GamePanelClient
     {
+        if ($this->alternate !== null) {
+            return $this->alternate;
+        }
+
         try {
             $feather = app(FeatherPanelSettings::class);
 

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Contracts\GamePanelClient;
 use App\Models\Server;
+use App\Services\GamePanelFallback;
 use App\Settings\PterodactylSettings;
 use Illuminate\Console\Command;
 use Throwable;
@@ -51,7 +52,10 @@ class CheckPanelCommand extends Command
         return self::SUCCESS;
     }
 
-    /** Never print a key; its shape is enough to spot the common mix-up. */
+    /**
+     * Never print a key. The prefix is shown only so two keys can be told
+     * apart at a glance — it says nothing about what a key is good for.
+     */
     private function describeKey(?string $key): string
     {
         if (empty($key)) {
@@ -65,40 +69,90 @@ class CheckPanelCommand extends Command
 
     private function checkApplicationKey(GamePanelClient $client): bool
     {
-        try {
-            $client->getNodes();
-            $this->line(' <info>OK</info>   application key: the panel answered');
+        $accepted = null;
 
-            return true;
-        } catch (Throwable $e) {
-            $this->line(' <error>FAIL</error> application key: ' . $e->getMessage());
+        $nodes = (new GamePanelFallback($client))->value(
+            function (GamePanelClient $candidate) use (&$accepted) {
+                $result = $candidate->getNodes();
+                $accepted = $candidate;
+
+                return $result;
+            },
+            'check:application-key',
+            fn ($result) => is_array($result)
+        );
+
+        if ($nodes === null) {
+            $this->line(' <error>FAIL</error> application key: no panel accepted it');
 
             return false;
         }
+
+        $via = $accepted?->panelName() ?? $client->panelName();
+        $this->line(' <info>OK</info>   application key: accepted by ' . $via
+            . ' (' . count($nodes) . ' node(s) listed)');
+
+        return true;
     }
 
+    /**
+     * Try the client key the way the application does: against the configured
+     * driver and, failing that, against the other one.
+     *
+     * The key's prefix is not evidence of anything. FeatherPanel hands out
+     * keys that begin with ptla_ and uses them for the client endpoints too,
+     * so a name-based verdict would be wrong on exactly the install this fork
+     * runs against. Only the panel's answer counts.
+     */
     private function checkClientKey(GamePanelClient $client): bool
     {
-        try {
-            $response = $client->getClientUser();
-        } catch (Throwable $e) {
-            $this->line(' <error>FAIL</error> client key: ' . $e->getMessage());
+        $fallback = new GamePanelFallback($client);
+        $accepted = null;
+
+        $response = $fallback->value(
+            function (GamePanelClient $candidate) use (&$accepted) {
+                $result = $candidate->getClientUser();
+
+                if ($result !== null && $result->successful()) {
+                    $accepted = $candidate;
+                }
+
+                return $result;
+            },
+            'check:client-key',
+            fn ($result) => $result !== null && $result->successful()
+        );
+
+        if ($response === null || $response->failed()) {
+            $status = $response?->status() ?? 0;
+
+            $this->line(' <error>FAIL</error> client key: no panel accepted it'
+                . ($status ? ' (last answer: HTTP ' . $status . ')' : ''));
+            $this->line('        Power signals go through the client endpoints. Create a fresh API key');
+            $this->line('        on an administrator account in the panel and put it in the client key');
+            $this->line('        field; the prefix does not matter, only that the panel issued it.');
 
             return false;
         }
 
-        if ($response->failed()) {
-            $this->line(' <error>FAIL</error> client key: the panel answered HTTP ' . $response->status());
-            $this->line('        A client key looks like ptlc_…; an application key (ptla_…) will not work here.');
+        $via = $accepted?->panelName() ?? $client->panelName();
 
-            return false;
+        if ($via !== $client->panelName()) {
+            $this->line(' <comment>NOTE</comment> the configured panel refused the client key, but '
+                . $via . ' accepted it');
+            $this->line('        Power controls will work through the fallback. Set the driver to '
+                . $via . ' to stop paying for the extra request each time.');
         }
 
-        $attributes = $response->json('attributes') ?? $response->json('data') ?? [];
+        $attributes = $response->json('attributes')
+            ?? $response->json('data.user')
+            ?? $response->json('data')
+            ?? [];
+
         $name = $attributes['username'] ?? $attributes['email'] ?? 'unknown';
         $admin = (bool) ($attributes['admin'] ?? $attributes['root_admin'] ?? false);
 
-        $this->line(' <info>OK</info>   client key: belongs to ' . $name);
+        $this->line(' <info>OK</info>   client key: accepted by ' . $via . ', belongs to ' . $name);
 
         if ($admin) {
             $this->line(' <info>OK</info>   that account is an administrator, so it can control every server');
@@ -107,8 +161,8 @@ class CheckPanelCommand extends Command
         }
 
         $this->line(' <error>FAIL</error> that account is NOT an administrator on the panel');
-        $this->line('        Power signals go through the client API, which only reaches servers the key\'s');
-        $this->line('        own account owns. Use a client key made on an administrator account.');
+        $this->line('        The client endpoints only reach servers the key\'s own account owns, so');
+        $this->line('        customer servers stay out of reach. Use a key made on an admin account.');
 
         return false;
     }
@@ -135,16 +189,24 @@ class CheckPanelCommand extends Command
             return true;
         }
 
-        try {
-            $response = $client->powerAction($server, 'start');
-        } catch (Throwable $e) {
-            $this->line(' <error>FAIL</error> power signal to "' . $server->name . '": ' . $e->getMessage());
+        // Through the fallback, because that is how the application sends
+        // these: a refusal from the configured panel is retried on the other.
+        $attempt = (new GamePanelFallback($client))->attempt(
+            fn (GamePanelClient $candidate) => $candidate->powerAction($server, 'start'),
+            'check:power'
+        );
+
+        $response = $attempt['response'];
+
+        if ($response === null) {
+            $this->line(' <error>FAIL</error> power signal to "' . $server->name . '": no panel could be reached');
 
             return false;
         }
 
         if ($response->successful()) {
-            $this->line(' <info>OK</info>   power signal accepted for "' . $server->name . '" (it was sent a start)');
+            $this->line(' <info>OK</info>   power signal accepted by ' . $attempt['client']->panelName()
+                . ' for "' . $server->name . '" (it was sent a start)');
 
             return true;
         }
