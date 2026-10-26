@@ -55,7 +55,7 @@ interface GamePanelClient
 
     public function updateUser(int $panelUserId, array $data);
 
-    public function getServerAttributes(int $panelServerId, bool $deleteOn404 = false);
+    public function getServerAttributes(?int $panelServerId, bool $deleteOn404 = false);
 
     public function updateServer(Server $server, Product $product);
 

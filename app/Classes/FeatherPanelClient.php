@@ -521,8 +521,13 @@ class FeatherPanelClient implements GamePanelClient
         return $response;
     }
 
-    public function getServerAttributes(int $panelServerId, bool $deleteOn404 = false)
+    public function getServerAttributes(?int $panelServerId, bool $deleteOn404 = false)
     {
+        if ($panelServerId === null) {
+            // Never created on the panel; there is nothing to read.
+            return null;
+        }
+
         try {
             $response = $this->application->get("admin/servers/{$panelServerId}");
         } catch (Exception $e) {

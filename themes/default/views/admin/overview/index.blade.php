@@ -301,7 +301,16 @@
                                                 <td>{{ $nodeID }}</td>
                                                 <td>{{ $node->name }}</td>
                                                 <td>{{ $node->activeServers }}/{{ $node->totalServers }}</td>
-                                                <td>{{ $node->usagePercent }}%</td>
+                                                <td>
+                                                    @if ($node->usageKnown ?? true)
+                                                        {{ $node->usagePercent }}%
+                                                    @else
+                                                        <span class="text-muted"
+                                                              title="{{ __('The game panel did not report how much of this node is in use.') }}">
+                                                            {{ __('unknown') }}
+                                                        </span>
+                                                    @endif
+                                                </td>
                                                 <td>{{ Currency::formatForDisplay($node->activeEarnings) }}/{{ Currency::formatForDisplay($node->totalEarnings) }}
                                                 </td>
                                             </tr>

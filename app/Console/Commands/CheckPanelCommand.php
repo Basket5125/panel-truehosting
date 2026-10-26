@@ -149,12 +149,25 @@ class CheckPanelCommand extends Command
             ?? $response->json('data')
             ?? [];
 
-        $name = $attributes['username'] ?? $attributes['email'] ?? 'unknown';
-        $admin = (bool) ($attributes['admin'] ?? $attributes['root_admin'] ?? false);
+        $name = $attributes['username'] ?? $attributes['email'] ?? null;
 
-        $this->line(' <info>OK</info>   client key: accepted by ' . $via . ', belongs to ' . $name);
+        $this->line(' <info>OK</info>   client key: accepted by ' . $via
+            . ($name ? ', belongs to ' . $name : ''));
 
-        if ($admin) {
+        // Only three answers are possible, and "the panel did not say" is not
+        // the same as "no". Reporting an absent field as a failure sent the
+        // operator hunting for a problem that may not exist.
+        $adminField = $attributes['admin'] ?? $attributes['root_admin'] ?? $attributes['is_admin'] ?? null;
+
+        if ($adminField === null) {
+            $this->line(' <comment>NOTE</comment> the panel did not say whether that account is an administrator');
+            $this->line('        If power controls reach customer servers, it is. If they come back with');
+            $this->line('        "not found", use a key made on an administrator account.');
+
+            return true;
+        }
+
+        if ((bool) $adminField) {
             $this->line(' <info>OK</info>   that account is an administrator, so it can control every server');
 
             return true;

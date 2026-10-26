@@ -399,8 +399,13 @@ class PterodactylClient implements GamePanelClient
      * @param  int  $pterodactylId
      * @return mixed
      */
-    public function getServerAttributes(int $pterodactylId, bool $deleteOn404 = false)
+    public function getServerAttributes(?int $pterodactylId, bool $deleteOn404 = false)
     {
+        if ($pterodactylId === null) {
+            // Never created on the panel; there is nothing to read.
+            return null;
+        }
+
         try {
             $response = $this->application->get("application/servers/{$pterodactylId}?include=egg,node,nest,location,allocations");
         } catch (Exception $e) {

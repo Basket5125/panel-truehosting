@@ -197,10 +197,45 @@ class GamePanelFallback
         return $this->value(
             fn (GamePanelClient $client) => $client->getNodeCapacity($nodeId),
             'capacity:' . $nodeId,
-            fn ($result) => is_array($result)
-                && ($result['memory'] ?? 0) > 0
-                && ($result['disk'] ?? 0) > 0
+            fn ($result) => $this->capacityLooksMeasured($result, $nodeId)
         );
+    }
+
+    /**
+     * Whether an answer about a node is worth believing.
+     *
+     * A panel that reports no usage at all for a node we know is carrying
+     * servers has not measured it — the Pterodactyl-shaped route on a
+     * FeatherPanel install answers exactly that way, with real limits and
+     * `allocated_resources` fixed at zero. Treating it as "the node is empty"
+     * both hides the real load and lets the node be oversold, so the other
+     * panel is asked instead.
+     */
+    private function capacityLooksMeasured($result, int $nodeId): bool
+    {
+        if (!is_array($result) || ($result['memory'] ?? 0) <= 0 || ($result['disk'] ?? 0) <= 0) {
+            return false;
+        }
+
+        if (($result['used_memory'] ?? 0) > 0 || ($result['used_disk'] ?? 0) > 0) {
+            return true;
+        }
+
+        // Zero usage is perfectly normal on an empty node; it is only
+        // suspicious when our own records say otherwise.
+        return !$this->hasServersOn($nodeId);
+    }
+
+    /** Whether this panel's own records place a live server on that node. */
+    private function hasServersOn(int $nodeId): bool
+    {
+        try {
+            return \App\Models\Server::where('node_id', $nodeId)
+                ->whereNull('canceled')
+                ->exists();
+        } catch (Throwable $e) {
+            return false;
+        }
     }
 
     /** @return \Illuminate\Http\Client\Response|null */

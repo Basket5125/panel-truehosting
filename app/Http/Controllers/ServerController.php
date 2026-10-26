@@ -384,7 +384,10 @@ class ServerController extends Controller
         foreach ($servers as $server) {
             try {
                 $serverInfo = $this->pterodactyl->getServerAttributes($server->pterodactyl_id);
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
+                // Throwable, not Exception: a driver handed the wrong type
+                // raises an Error, which used to escape and take the page with
+                // it rather than dropping one row.
                 // One server the panel cannot answer for must not take the
                 // whole list down; it is listed with what is stored locally.
                 Log::warning('Could not read server from the game panel', [

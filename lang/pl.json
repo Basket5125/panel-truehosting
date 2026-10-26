@@ -916,5 +916,6 @@
     "Server upgraded. Restart it to apply the new limits.": "Serwer został ulepszony. Zrestartuj go, aby zastosować nowe limity.",
     "Could not apply the new limits on the game panel. Nothing was changed.": "Nie udało się zastosować nowych limitów w panelu gier. Nic nie zostało zmienione.",
     "Game panel unreachable": "Panel gier nieosiągalny",
-    "The node and server figures below could not be read from the game panel, so they are incomplete. Check the panel URL and API keys in the settings.": "Danych o węzłach i serwerach nie udało się odczytać z panelu gier, więc poniższe liczby są niepełne. Sprawdź adres panelu i klucze API w ustawieniach."
+    "The node and server figures below could not be read from the game panel, so they are incomplete. Check the panel URL and API keys in the settings.": "Danych o węzłach i serwerach nie udało się odczytać z panelu gier, więc poniższe liczby są niepełne. Sprawdź adres panelu i klucze API w ustawieniach.",
+    "The game panel did not report how much of this node is in use.": "Panel gier nie podał, w jakim stopniu ten węzeł jest wykorzystany."
 }

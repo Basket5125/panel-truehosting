@@ -181,7 +181,14 @@ class OverViewController extends Controller
             $capacity = $fallback->capacity($nodeId, 60);
             $nodes[$nodeId]->usagePercent = 0;
 
-            if ($capacity && $capacity['memory'] > 0 && $capacity['disk'] > 0) {
+            // Null means no panel could measure it. Saying "0%" then would
+            // read as "this node is empty", which is a different statement
+            // and the one that hides a node filling up.
+            $nodes[$nodeId]->usageKnown = $capacity !== null
+                && $capacity['memory'] > 0
+                && $capacity['disk'] > 0;
+
+            if ($nodes[$nodeId]->usageKnown) {
                 $nodes[$nodeId]->usagePercent = round(max(
                     $capacity['used_memory'] / $capacity['memory'],
                     $capacity['used_disk'] / $capacity['disk']
