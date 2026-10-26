@@ -210,7 +210,7 @@ class OverViewController extends Controller
         ) ?? [];
 
         foreach ($panelServers as $server) { //calculates total of credit usage for each node separately + total
-            $nodeId = $server['attributes']['node'];
+            $nodeId = $server['attributes']['node'] ?? null;
 
             // A server on a node this panel no longer lists would otherwise
             // fatal on the missing key below.

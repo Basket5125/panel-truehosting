@@ -593,13 +593,34 @@ class ServerController extends Controller
         ]);
     }
 
+    /**
+     * The allocation a server is bound to, from whichever shape the panel
+     * sent. Reading one key blindly is how the upgrade page kept dying on
+     * payloads that nest it instead.
+     *
+     * @param  array<string, mixed>  $panelInfo
+     */
+    public static function resolveAllocation(array $panelInfo): ?int
+    {
+        $direct = $panelInfo['allocation'] ?? $panelInfo['attributes']['allocation'] ?? null;
+
+        if ($direct !== null) {
+            return (int) $direct;
+        }
+
+        $nested = $panelInfo['relationships']['allocations']['data'][0]['attributes']['id'] ?? null;
+
+        return $nested !== null ? (int) $nested : null;
+    }
+
     private function getUpgradeOptions(Server $server, array $serverInfo): \Illuminate\Database\Eloquent\Collection
     {
         $currentProduct = Product::find($server->product_id);
-        $nodeId = $serverInfo['relationships']['node']['attributes']['id'];
-        // Capacity, not the raw node: null when the panel does not report it.
-        $pteroNode = $this->pterodactyl->getNodeCapacity($nodeId);
-        $currentEgg = $serverInfo['egg'];
+        $nodeId = Server::resolveNodeId($serverInfo, $server);
+        // Capacity, not the raw node: null when the panel does not report it,
+        // and null again when we cannot even tell which node this is.
+        $pteroNode = $nodeId !== null ? $this->pterodactyl->getNodeCapacity($nodeId) : null;
+        $currentEgg = $serverInfo['egg'] ?? $server->product?->eggs->first()?->id;
 
         //$currentProductEggs = $currentProduct->eggs->pluck('id')->toArray();
 
@@ -712,8 +733,19 @@ class ServerController extends Controller
             return false;
         }
 
-        $nodeId = $serverInfo['relationships']['node']['attributes']['id'];
-        $node = Node::findOrFail($nodeId);
+        $nodeId = Server::resolveNodeId($serverInfo, $server);
+        $node = $nodeId !== null ? Node::find($nodeId) : null;
+
+        if (!$node) {
+            // Which node this is cannot be established, so its free space
+            // cannot be checked here. The panel still refuses the change if
+            // there is no room, and that refusal is handled cleanly.
+            Log::warning('Upgrading without a node capacity check: node unknown', [
+                'server_id' => $server->id,
+            ]);
+
+            return true;
+        }
 
         // Check node resources
         $requireMemory = $newProduct->memory - $oldProduct->memory;
@@ -741,7 +773,13 @@ class ServerController extends Controller
      */
     private function processUpgrade(Server $server, Product $oldProduct, Product $newProduct, User $user): bool
     {
-        $server->allocation = $this->pterodactyl->getServerAttributes($server->pterodactyl_id)['allocation'];
+        $panelInfo = $this->pterodactyl->getServerAttributes($server->pterodactyl_id);
+
+        if (!$panelInfo) {
+            throw new Exception(__('The game panel does not know this server.'));
+        }
+
+        $server->allocation = self::resolveAllocation($panelInfo);
 
         $response = $this->pterodactyl->updateServer($server, $newProduct);
         if ($response->failed()) {

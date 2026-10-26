@@ -51,18 +51,26 @@ class ServerUpgradeService
 
             $pterodactylServer = $this->pterodactylClient->getServerAttributes($server->pterodactyl_id);
 
-            $pterodactylServerNodeId = $pterodactylServer['relationships']['node']['attributes']['id'];
-            $node = Node::findOrFail($pterodactylServerNodeId);
+            $pterodactylServerNodeId = Server::resolveNodeId($pterodactylServer, $server);
+            $node = $pterodactylServerNodeId !== null ? Node::find($pterodactylServerNodeId) : null;
 
-            // Check if the new product can be applied to the server.
+            // Check if the new product can be applied to the server. When the
+            // node cannot be identified there is nothing to measure; the panel
+            // still refuses the change if there is no room for it.
             $requiredMemory = $product->memory - $server->product->memory;
             $requiredDisk = $product->disk - $server->product->disk;
 
-            if (!$this->pterodactylClient->checkNodeResources($node, $requiredMemory, $requiredDisk)) {
+            if ($node && !$this->pterodactylClient->checkNodeResources($node, $requiredMemory, $requiredDisk)) {
                 throw new \Exception('Insufficient resources on the node to upgrade the server.', 422);
             }
 
-            $pterodactylServerAllocation = $pterodactylServer['allocation'];
+            $pterodactylServerAllocation = \App\Http\Controllers\ServerController::resolveAllocation($pterodactylServer);
+
+            if ($pterodactylServerAllocation === null) {
+                $this->refund($user, $product, $server);
+
+                throw new \Exception('The game panel did not say which allocation this server uses.');
+            }
 
             $updateServerResponse = $this->pterodactylClient->updateServerBuild($server->pterodactyl_id, $pterodactylServerAllocation, $product);
             

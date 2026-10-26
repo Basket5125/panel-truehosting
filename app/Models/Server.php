@@ -173,6 +173,34 @@ class Server extends Model
         return parent::getAttribute($key);
     }
 
+    /**
+     * Work out which node a server sits on from whatever the panel sent.
+     *
+     * Pterodactyl nests it under `relationships.node.attributes.id`, which is
+     * only there when the relation was asked for and included; the
+     * FeatherPanel driver reports a flat `node`. Reading one shape blindly
+     * produced "Undefined array key node" on every upgrade. The panel id we
+     * recorded ourselves is the last resort.
+     *
+     * @param  array<string, mixed>  $panelInfo  one server as the panel returned it
+     */
+    public static function resolveNodeId(array $panelInfo, ?Server $server = null): ?int
+    {
+        $nested = $panelInfo['relationships']['node']['attributes']['id'] ?? null;
+
+        if ($nested !== null) {
+            return (int) $nested;
+        }
+
+        $flat = $panelInfo['node'] ?? $panelInfo['attributes']['node'] ?? null;
+
+        if ($flat !== null) {
+            return (int) $flat;
+        }
+
+        return $server?->node_id !== null ? (int) $server->node_id : null;
+    }
+
     /** A free trial server, which expires instead of being billed. */
     public function isTrial(): bool
     {
