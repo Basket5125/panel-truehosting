@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Classes\PanelServerShape;
 use App\Contracts\GamePanelClient;
 use App\Models\Server;
 use App\Models\User;
@@ -211,16 +212,19 @@ class ServerCreationService
 
     private function handleProvisionSuccess(Server $server, $response, int $chargedPrice): Server
     {
-        $serverAttributes = $response->json()['attributes'] ?? null;
+        // Read out of whichever envelope the panel used rather than one fixed
+        // path: a reply that was not understood used to be dropped, which left
+        // a paid-for server with no panel id and no identifier.
+        $identity = PanelServerShape::identity($response->json());
 
-        if (!$serverAttributes || !isset($serverAttributes['id']) || !isset($serverAttributes['identifier'])) {
-            throw new \Exception('Invalid response from Pterodactyl on server creation.');
+        if ($identity === null) {
+            throw new \Exception('The panel accepted the server but did not say which one it created.');
         }
 
         try {
             $server->update([
-                'pterodactyl_id' => $serverAttributes['id'],
-                'identifier' => $serverAttributes['identifier'],
+                'pterodactyl_id' => $identity['id'],
+                'identifier' => $identity['identifier'],
                 'status' => Server::STATUS_ACTIVE,
             ]);
 
@@ -252,12 +256,12 @@ class ServerCreationService
             $remoteResponse = $this->pterodactylClient->getServerByExternalId($server->id);
 
             if ($remoteResponse->successful()) {
-                $remoteAttributes = $remoteResponse->json()['attributes'] ?? null;
+                $remoteIdentity = PanelServerShape::identity($remoteResponse->json());
 
-                if ($remoteAttributes && isset($remoteAttributes['id']) && isset($remoteAttributes['identifier'])) {
+                if ($remoteIdentity !== null) {
                     $server->update([
-                        'pterodactyl_id' => $remoteAttributes['id'],
-                        'identifier' => $remoteAttributes['identifier'],
+                        'pterodactyl_id' => $remoteIdentity['id'],
+                        'identifier' => $remoteIdentity['identifier'],
                         'status' => Server::STATUS_ACTIVE,
                     ]);
 

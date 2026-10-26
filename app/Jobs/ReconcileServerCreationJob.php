@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Contracts\GamePanelClient;
+use App\Classes\PanelServerShape;
 use App\Models\Server;
 use App\Services\CreditService;
 use Illuminate\Bus\Queueable;
@@ -60,15 +61,15 @@ class ReconcileServerCreationJob implements ShouldQueue
         }
 
         if ($response->successful()) {
-            $attributes = $response->json()['attributes'] ?? null;
+            $identity = PanelServerShape::identity($response->json());
 
-            if (!$attributes || !isset($attributes['id']) || !isset($attributes['identifier'])) {
-                throw new \Exception('ReconcileServerCreationJob: invalid pterodactyl server payload');
+            if ($identity === null) {
+                throw new \Exception('ReconcileServerCreationJob: the panel did not say which server this is');
             }
 
             $server->update([
-                'pterodactyl_id' => $attributes['id'],
-                'identifier' => $attributes['identifier'],
+                'pterodactyl_id' => $identity['id'],
+                'identifier' => $identity['identifier'],
                 'status' => Server::STATUS_ACTIVE,
             ]);
 
@@ -111,11 +112,11 @@ class ReconcileServerCreationJob implements ShouldQueue
         try {
             $response = $pterodactylClient->getServerByExternalId($server->id);
             if ($response->successful()) {
-                $attributes = $response->json()['attributes'] ?? null;
-                if ($attributes && isset($attributes['id']) && isset($attributes['identifier'])) {
+                $identity = PanelServerShape::identity($response->json());
+                if ($identity !== null) {
                     $server->update([
-                        'pterodactyl_id' => $attributes['id'],
-                        'identifier' => $attributes['identifier'],
+                        'pterodactyl_id' => $identity['id'],
+                        'identifier' => $identity['identifier'],
                         'status' => Server::STATUS_ACTIVE,
                     ]);
                     dispatch(new PostServerCreationJob($server->id));

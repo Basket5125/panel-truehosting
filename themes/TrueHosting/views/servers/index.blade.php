@@ -75,6 +75,17 @@
                             'annually'      => __('per Year'),
                             default         => '',
                         };
+
+                        // The panel is the only source of the category and the
+                        // engine, so a server it cannot answer for yet has
+                        // neither. Printing the separator on its own left a
+                        // stray dot under the name; the package is the next
+                        // best thing to say.
+                        $meta = array_values(array_filter([$server->nest, $server->egg], fn ($part) => filled($part)));
+
+                        if (!$meta && $product) {
+                            $meta = [$product->name];
+                        }
                     @endphp
 
                     <div class="th-server-card @if ($server->isTrial()) is-trial @endif">
@@ -85,7 +96,9 @@
                             </span>
                             <div style="min-width:0;flex:1 1 auto">
                                 <h3 class="th-server-name">{{ $server->name }}</h3>
-                                <span class="th-server-meta">{{ $server->nest }} &middot; {{ $server->egg }}</span>
+                                @if ($meta)
+                                    <span class="th-server-meta">{{ implode(' · ', $meta) }}</span>
+                                @endif
                             </div>
 
                             @php
@@ -283,11 +296,23 @@
                         @endif
 
                         <div class="th-card-foot">
-                            <a href="{{ $pterodactyl_url }}/server/{{ $server->identifier }}" target="__blank"
-                               class="th-btn th-btn-primary" style="flex:1 1 auto"
-                               data-toggle="tooltip" data-placement="bottom" title="{{ __('Manage Server') }}">
-                                <i class="fas fa-tools"></i>{{ __('Manage') }}
-                            </a>
+                            {{-- Without an identifier the link would point at the game
+                                 panel's /server/ with nothing after it, which is a 404.
+                                 Better to say the server is not ready than to send
+                                 someone to an error page. --}}
+                            @if ($server->identifier)
+                                <a href="{{ $pterodactyl_url }}/server/{{ $server->identifier }}" target="__blank"
+                                   class="th-btn th-btn-primary" style="flex:1 1 auto"
+                                   data-toggle="tooltip" data-placement="bottom" title="{{ __('Manage Server') }}">
+                                    <i class="fas fa-tools"></i>{{ __('Manage') }}
+                                </a>
+                            @else
+                                <button type="button" class="th-btn th-btn-primary" style="flex:1 1 auto" disabled
+                                        data-toggle="tooltip" data-placement="bottom"
+                                        title="{{ __('This server is still being set up on the game panel.') }}">
+                                    <i class="fas fa-hourglass-half"></i>{{ __('Manage') }}
+                                </button>
+                            @endif
                             <a href="{{ route('servers.show', ['server' => $server->id]) }}"
                                class="th-btn th-btn-ghost"
                                data-toggle="tooltip" data-placement="bottom" title="{{ __('Server Settings') }}">

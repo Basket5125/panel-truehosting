@@ -3,8 +3,12 @@
 namespace Tests\Unit;
 
 use App\Classes\FeatherPanelClient;
+use App\Models\Pterodactyl\Egg;
 use App\Models\Pterodactyl\Nest;
 use App\Models\Pterodactyl\Node;
+use App\Models\Product;
+use App\Models\Server;
+use App\Models\User;
 use App\Settings\FeatherPanelSettings;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -188,5 +192,128 @@ class FeatherPanelClientTest extends TestCase
 
         $this->assertSame(42, $user['id']);
         $this->assertSame('u-uuid-42', $user['uuid']);
+    }
+
+    /* ---------------------------------------------------------------------
+     | Server creation
+     |
+     | Everything downstream reads Pterodactyl's {attributes} envelope and
+     | needs the panel id and the identifier out of it. A reply this driver
+     | hands over untranslated leaves a record with no console link and no
+     | engine on it, so the translation is pinned here.
+     * ------------------------------------------------------------------- */
+
+    private function serverToCreate(): Server
+    {
+        $server = new Server();
+        $server->forceFill(['id' => 'srv-1', 'name' => 'Test server']);
+
+        $user = new User();
+        $user->forceFill(['pterodactyl_id' => 5]);
+        $server->setRelation('user', $user);
+
+        $product = new Product();
+        $product->forceFill([
+            'memory' => 2048, 'swap' => 0, 'disk' => 10240, 'io' => 500, 'cpu' => 200,
+            'databases' => 1, 'backups' => 1, 'allocations' => 1, 'oom_killer' => false,
+        ]);
+        $server->setRelation('product', $product);
+
+        return $server;
+    }
+
+    private function eggToCreate(): Egg
+    {
+        $egg = new Egg();
+        $egg->forceFill([
+            'id' => 11,
+            'nest_id' => 7,
+            'docker_image' => 'ghcr.io/example/java:21',
+            'startup' => 'java -jar server.jar',
+            'environment' => [],
+        ]);
+
+        return $egg;
+    }
+
+    public function test_a_created_server_is_answered_in_pterodactyls_envelope(): void
+    {
+        Http::fake([
+            '*/api/admin/allocations/9' => Http::response($this->envelope([
+                'allocation' => ['id' => 9, 'node_id' => 4],
+            ])),
+            '*/api/admin/servers' => Http::response($this->envelope([
+                'server' => ['id' => 42, 'uuidShort' => 'a1b2c3d4', 'uuid' => 'long-uuid', 'name' => 'Test server'],
+            ])),
+        ]);
+
+        $response = $this->client()->createServer($this->serverToCreate(), $this->eggToCreate(), 9);
+
+        $this->assertTrue($response->successful());
+        $this->assertSame(42, $response->json()['attributes']['id']);
+        $this->assertSame('a1b2c3d4', $response->json()['attributes']['identifier']);
+    }
+
+    public function test_a_create_reply_without_the_record_is_read_back_by_external_id(): void
+    {
+        Http::fake([
+            '*/api/admin/allocations/9' => Http::response($this->envelope([
+                'allocation' => ['id' => 9, 'node_id' => 4],
+            ])),
+            '*/api/admin/servers/external/srv-1' => Http::response($this->envelope([
+                'server' => ['id' => 42, 'uuidShort' => 'a1b2c3d4'],
+            ])),
+            '*/api/admin/servers' => Http::response(['success' => true]),
+        ]);
+
+        $response = $this->client()->createServer($this->serverToCreate(), $this->eggToCreate(), 9);
+
+        $this->assertSame(42, $response->json()['attributes']['id']);
+        $this->assertSame('a1b2c3d4', $response->json()['attributes']['identifier']);
+    }
+
+    public function test_a_refused_create_is_handed_back_with_its_own_status(): void
+    {
+        Http::fake([
+            '*/api/admin/allocations/9' => Http::response($this->envelope([
+                'allocation' => ['id' => 9, 'node_id' => 4],
+            ])),
+            '*/api/admin/servers' => Http::response(['success' => false, 'error_message' => 'No room'], 400),
+        ]);
+
+        $response = $this->client()->createServer($this->serverToCreate(), $this->eggToCreate(), 9);
+
+        $this->assertTrue($response->failed());
+        $this->assertSame(400, $response->status());
+        $this->assertSame('No room', $response->json()['error_message']);
+    }
+
+    public function test_a_server_read_by_external_id_is_answered_in_pterodactyls_envelope(): void
+    {
+        Http::fake([
+            '*/api/admin/servers/external/srv-1' => Http::response($this->envelope([
+                'server' => ['id' => 42, 'uuidShort' => 'a1b2c3d4', 'node_id' => 4, 'spell_id' => 11],
+            ])),
+        ]);
+
+        $response = $this->client()->getServerByExternalId('srv-1');
+
+        $this->assertSame(42, $response->json()['attributes']['id']);
+        $this->assertSame('a1b2c3d4', $response->json()['attributes']['identifier']);
+        // The guaranteed shape comes with it, so no caller reads a missing key.
+        $this->assertArrayHasKey('location', $response->json()['attributes']['relationships']);
+    }
+
+    public function test_a_missing_server_keeps_its_404(): void
+    {
+        Http::fake([
+            '*/api/admin/servers/external/srv-1' => Http::response(['success' => false], 404),
+        ]);
+
+        $response = $this->client()->getServerByExternalId('srv-1');
+
+        // A 404 is what tells the caller to refund and drop the record; it must
+        // survive the translation.
+        $this->assertSame(404, $response->status());
     }
 }

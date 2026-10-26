@@ -2,6 +2,7 @@
 
 namespace App\Classes;
 
+use App\Classes\PanelResponse;
 use App\Classes\PanelServerShape;
 use App\Contracts\GamePanelClient;
 use App\Models\Pterodactyl\Egg;
@@ -424,7 +425,7 @@ class FeatherPanelClient implements GamePanelClient
         // node is resolved from the allocation instead of widening it.
         $nodeId = $this->getAllocationNodeId($allocationId);
 
-        return $this->application->put('admin/servers', [
+        $response = $this->application->put('admin/servers', [
             'name' => $server->name,
             'external_id' => $server->id,
             'owner_id' => $server->user->pterodactyl_id,
@@ -446,6 +447,104 @@ class FeatherPanelClient implements GamePanelClient
             'backup_limit' => $server->product->backups,
             'allocation_limit' => $server->product->allocations,
         ]);
+
+        if ($response->failed()) {
+            // Handed back untouched: the caller reports the panel's own error
+            // and branches on its status.
+            return $response;
+        }
+
+        // Whatever the reply looks like, the caller needs the panel id and the
+        // identifier out of it — without them the server is saved with no way
+        // to reach it, which is how a record ends up with an empty manage link
+        // and no engine on it.
+        $created = $this->createdServerAttributes($response, (string) $server->id);
+
+        if ($created === null) {
+            throw $this->getException('The panel accepted the server but did not say which one it created.');
+        }
+
+        return PanelResponse::attributes($created);
+    }
+
+    /**
+     * The created server: from the create reply when it carries the record, and
+     * from a read on the external id we just sent when it does not.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function createdServerAttributes(Response $response, string $externalId): ?array
+    {
+        $attributes = $this->readServer($response);
+
+        if ($this->isReachable($attributes)) {
+            return $attributes;
+        }
+
+        try {
+            $lookup = $this->application->get("admin/servers/external/{$externalId}");
+        } catch (Exception $e) {
+            Log::warning('FeatherPanel: could not read back the server it just created', [
+                'external_id' => $externalId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($lookup->failed()) {
+            return null;
+        }
+
+        $attributes = $this->readServer($lookup);
+
+        return $this->isReachable($attributes) ? $attributes : null;
+    }
+
+    /**
+     * A server reply mapped to Pterodactyl's field names, or an empty array
+     * when it did not hold one.
+     *
+     * @return array<string, mixed>
+     */
+    private function readServer(Response $response): array
+    {
+        try {
+            return $this->mapServer($this->serverRecord($this->unwrap($response, 'Failed to read server')));
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Whether a mapped server has the two fields everything else needs: the
+     * panel id to act on it and the identifier to link to it.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function isReachable(array $attributes): bool
+    {
+        return !empty($attributes['id']) && !empty($attributes['identifier']);
+    }
+
+    /**
+     * The server record inside a reply, wherever the panel nested it.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function serverRecord(array $data): array
+    {
+        foreach (['server', 'servers'] as $key) {
+            if (isset($data[$key]) && is_array($data[$key])) {
+                $record = $data[$key];
+
+                // A list of one is still an answer about one server.
+                return array_is_list($record) ? (array) ($record[0] ?? []) : $record;
+            }
+        }
+
+        return $data;
     }
 
     /**
@@ -467,20 +566,44 @@ class FeatherPanelClient implements GamePanelClient
 
     public function getServerByExternalId(string $externalId)
     {
-        try {
-            return $this->application->get("admin/servers/external/{$externalId}");
-        } catch (Exception $e) {
-            throw $this->getException('Failed to get server by external_id - ' . $e->getMessage());
-        }
+        return $this->shapedServer(
+            fn () => $this->application->get("admin/servers/external/{$externalId}"),
+            'Failed to get server by external_id'
+        );
     }
 
     public function getServerById(int $panelServerId)
     {
+        return $this->shapedServer(
+            fn () => $this->application->get("admin/servers/{$panelServerId}"),
+            'Failed to get server'
+        );
+    }
+
+    /**
+     * A server read, handed back in Pterodactyl's envelope.
+     *
+     * A failure is returned untouched on purpose: callers tell a 404 — the
+     * server really is not there, refund and drop the record — apart from every
+     * other status, and that only works while the status survives translation.
+     *
+     * @throws Exception
+     */
+    private function shapedServer(callable $request, string $what): Response
+    {
         try {
-            return $this->application->get("admin/servers/{$panelServerId}");
+            $response = $request();
         } catch (Exception $e) {
-            throw $this->getException('Failed to get server - ' . $e->getMessage());
+            throw $this->getException($what . ' - ' . $e->getMessage());
         }
+
+        if ($response->failed()) {
+            return $response;
+        }
+
+        $attributes = $this->mapServer($this->serverRecord($this->unwrap($response, $what)));
+
+        return PanelResponse::attributes(PanelServerShape::normalise($attributes));
     }
 
     public function deleteServer(int $panelServerId)

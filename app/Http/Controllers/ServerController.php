@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Classes\PanelServerShape;
 use App\Models\Pterodactyl\Egg;
 use App\Models\Pterodactyl\Location;
 use App\Models\Pterodactyl\Nest;
@@ -382,6 +383,10 @@ class ServerController extends Controller
         $servers = Auth::user()->servers;
 
         foreach ($servers as $server) {
+            // A record whose panel ids were never saved is worth one lookup
+            // before it is drawn, or it stays unreachable for good.
+            $this->adoptFromPanel($server);
+
             try {
                 $serverInfo = $this->pterodactyl->getServerAttributes($server->pterodactyl_id);
             } catch (\Throwable $e) {
@@ -406,6 +411,78 @@ class ServerController extends Controller
         }
 
         return $servers;
+    }
+
+    /**
+     * Save the panel ids of a server the panel has but this side never
+     * recorded.
+     *
+     * The create reply is the only moment those ids are offered. A reply a
+     * driver did not understand left behind a record pointing at nothing: an
+     * empty console link, no category, no engine, and no way to start or stop
+     * it. The panel still knows the server by the external id it was given, so
+     * the record is adopted the next time the list is drawn rather than staying
+     * broken until someone reports it.
+     */
+    private function adoptFromPanel(Server $server): void
+    {
+        if ($server->pterodactyl_id) {
+            return;
+        }
+
+        try {
+            $response = $this->pterodactyl->getServerByExternalId((string) $server->id);
+        } catch (\Throwable $e) {
+            Log::warning('Could not look up a server by its external id', [
+                'server_id' => $server->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        if (!$response->successful()) {
+            return;
+        }
+
+        $identity = PanelServerShape::identity($response->json());
+
+        if ($identity === null) {
+            return;
+        }
+
+        $changes = [
+            'pterodactyl_id' => $identity['id'],
+            'identifier' => $identity['identifier'],
+        ];
+
+        // The customer was charged and the server is on the panel, so it is
+        // active — but a status that was already settled is left alone.
+        $wasUnfinished = in_array($server->status, [
+            Server::STATUS_PROVISIONING,
+            Server::STATUS_PENDING_RECONCILIATION,
+        ], true);
+
+        if ($wasUnfinished) {
+            $changes['status'] = Server::STATUS_ACTIVE;
+        }
+
+        // Written through the query builder, like the rename below: save()
+        // would try to write the view-only fields as columns.
+        $server->newQuery()->whereKey($server->getKey())->update($changes);
+
+        $server->forceFill($changes);
+        $server->syncOriginalAttributes(array_keys($changes));
+
+        Log::notice('Adopted a server the panel had but this side had not recorded', [
+            'server_id' => $server->id,
+            'pterodactyl_id' => $identity['id'],
+        ]);
+
+        if ($wasUnfinished) {
+            // It never had its post-creation step, which is what starts it.
+            dispatch(new \App\Jobs\PostServerCreationJob($server->id));
+        }
     }
 
     private function updateServerInfo(Server $server, array $serverInfo): void
@@ -450,6 +527,17 @@ class ServerController extends Controller
             }
 
             $server->state = $serverInfo['status'] ?? null;
+
+            // The identifier is what the console link is built from. When it
+            // is missing here but present on the panel, it is saved rather
+            // than only borrowed for this one render.
+            if (filled($serverInfo['identifier'] ?? null) && $server->identifier !== $serverInfo['identifier']) {
+                $server->newQuery()->whereKey($server->getKey())
+                    ->update(['identifier' => $serverInfo['identifier']]);
+
+                $server->identifier = $serverInfo['identifier'];
+                $server->syncOriginalAttribute('identifier');
+            }
 
             if (isset($serverInfo['name']) && $server->name !== $serverInfo['name']) {
                 // Only the name is a real column. Everything set above —

@@ -60,4 +60,49 @@ class PanelServerShapeTest extends TestCase
         $this->assertArrayHasKey('name', $shape);
         $this->assertNull($shape['name']);
     }
+
+    /* ---------------------------------------------------------------------
+     | Which server did the panel just create?
+     * ------------------------------------------------------------------- */
+
+    public function test_the_identity_is_read_from_pterodactyls_envelope(): void
+    {
+        $identity = PanelServerShape::identity([
+            'object' => 'server',
+            'attributes' => ['id' => 42, 'identifier' => 'a1b2c3d4'],
+        ]);
+
+        $this->assertSame(42, $identity['id']);
+        $this->assertSame('a1b2c3d4', $identity['identifier']);
+    }
+
+    public function test_the_identity_is_read_from_featherpanels_envelope(): void
+    {
+        // The short uuid is the same thing Pterodactyl calls the identifier.
+        $identity = PanelServerShape::identity([
+            'success' => true,
+            'data' => ['server' => ['id' => 42, 'uuidShort' => 'a1b2c3d4']],
+        ]);
+
+        $this->assertSame(42, $identity['id']);
+        $this->assertSame('a1b2c3d4', $identity['identifier']);
+    }
+
+    public function test_a_bare_record_is_still_understood(): void
+    {
+        $identity = PanelServerShape::identity(['id' => 7, 'identifier' => 'zzz11111']);
+
+        $this->assertSame(7, $identity['id']);
+        $this->assertSame('zzz11111', $identity['identifier']);
+    }
+
+    public function test_a_reply_without_a_server_has_no_identity(): void
+    {
+        // Half an answer is no answer: saving an id with no identifier leaves a
+        // server nobody can open.
+        $this->assertNull(PanelServerShape::identity(['attributes' => ['id' => 42]]));
+        $this->assertNull(PanelServerShape::identity(['success' => true]));
+        $this->assertNull(PanelServerShape::identity([]));
+        $this->assertNull(PanelServerShape::identity(null));
+    }
 }

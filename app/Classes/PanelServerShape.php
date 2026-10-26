@@ -59,6 +59,67 @@ class PanelServerShape
     }
 
     /**
+     * The two fields a newly created server is useless without: the panel id to
+     * act on it with, and the identifier its console link is built from.
+     *
+     * Read out of whichever envelope the panel used. Pterodactyl answers
+     * {attributes: {...}}; the FeatherPanel-shaped routes answer
+     * {success, data: {server: {...}}}; and a panel that speaks one dialect on
+     * its read routes has still been seen to answer in the other on its
+     * writes. Reading one fixed path is how a server came to be saved with no
+     * identifier at all — a blank engine on its card and a manage link that
+     * went to a 404.
+     *
+     * @param  array<string, mixed>|null  $body
+     * @return array{id: int|string, identifier: string}|null
+     */
+    public static function identity(?array $body): ?array
+    {
+        if (!$body) {
+            return null;
+        }
+
+        foreach (self::candidates($body) as $record) {
+            if (!is_array($record)) {
+                continue;
+            }
+
+            $id = $record['id'] ?? null;
+            // Pterodactyl's "identifier" is FeatherPanel's short uuid.
+            $identifier = $record['identifier'] ?? ($record['uuidShort'] ?? null);
+
+            if (!empty($id) && !empty($identifier)) {
+                return ['id' => $id, 'identifier' => $identifier];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Every place a panel has been seen to put a server record, outermost
+     * first.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array<int, mixed>
+     */
+    private static function candidates(array $body): array
+    {
+        $attributes = $body['attributes'] ?? null;
+        $data = $body['data'] ?? null;
+
+        return [
+            $attributes,
+            is_array($attributes) ? ($attributes['attributes'] ?? null) : null,
+            is_array($data) ? ($data['server'] ?? null) : null,
+            is_array($data) ? ($data['attributes'] ?? null) : null,
+            $data,
+            $body['server'] ?? null,
+            $body,
+        ];
+    }
+
+    /**
      * Recursive array_replace that only adds what is absent. A key the panel
      * sent is never overwritten, not even when it is null.
      *
