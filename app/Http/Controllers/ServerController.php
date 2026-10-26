@@ -581,8 +581,27 @@ class ServerController extends Controller
             return back()->with('error', __('This is not your Server!'));
         }
 
-        $serverAttributes = $this->pterodactyl->getServerAttributes($server->pterodactyl_id);
+        try {
+            $serverAttributes = $this->pterodactyl->getServerAttributes($server->pterodactyl_id) ?? [];
+        } catch (\Throwable $e) {
+            // The panel being unreachable is no reason to deny the customer
+            // the page; it is shown with what we hold locally.
+            Log::warning('Could not read the server from the game panel', [
+                'server_id' => $server->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $serverAttributes = \App\Classes\PanelServerShape::normalise([]);
+        }
+
+        // Same enrichment the list gets, so the page can show the location and
+        // node by name even when the panel sends only ids.
+        if ($serverAttributes !== []) {
+            $this->updateServerInfo($server, $serverAttributes);
+        }
+
         $upgradeOptions = $this->getUpgradeOptions($server, $serverAttributes);
+
         return view('servers.settings')->with([
             'server' => $server,
             'serverAttributes' => $serverAttributes,

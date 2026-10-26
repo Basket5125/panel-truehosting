@@ -2,6 +2,7 @@
 
 namespace App\Classes;
 
+use App\Classes\PanelServerShape;
 use App\Contracts\GamePanelClient;
 use App\Models\Pterodactyl\Egg;
 use App\Models\Pterodactyl\Nest;
@@ -558,7 +559,9 @@ class FeatherPanelClient implements GamePanelClient
             $attributes['relationships']['allocations']['data'][] = ['attributes' => $allocation];
         }
 
-        return $attributes;
+
+        // Same guaranteed shape as the other driver.
+        return PanelServerShape::normalise($attributes);
     }
 
     /**

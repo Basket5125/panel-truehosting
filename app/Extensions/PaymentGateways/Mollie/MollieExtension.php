@@ -62,7 +62,9 @@ class MollieExtension extends PaymentExtension
                 throw new Exception('Payment failed');
             }
 
-            return $response->json()['_links']['checkout']['href'];
+            // A payment that cannot be started must say so, not raise an
+            // undefined-key error halfway through checkout.
+            return $response->json()['_links']['checkout']['href'] ?? null;
         } catch (Exception $ex) {
             Log::error('Mollie Payment: ' . $ex->getMessage());
             throw new Exception('Payment failed');

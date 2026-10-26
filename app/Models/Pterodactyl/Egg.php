@@ -193,24 +193,43 @@ class Egg extends Model
                 $array = [];
                 $environment = [];
 
-                $array['id'] = $egg['attributes']['id'];
-                $array['nest_id'] = $egg['attributes']['nest'];
-                $array['name'] = $egg['attributes']['name'];
-                $array['description'] = $egg['attributes']['description'];
-                $array['docker_image'] = self::resolveDockerImage($egg['attributes']);
-                $array['startup'] = $egg['attributes']['startup'];
+                $attributes = $egg['attributes'] ?? $egg;
+
+                if (empty($attributes['id'])) {
+                    continue;
+                }
+
+                $array['id'] = $attributes['id'];
+                $array['nest_id'] = $attributes['nest'] ?? $nest->id;
+                $array['name'] = $attributes['name'] ?? ('#' . $attributes['id']);
+                $array['description'] = $attributes['description'] ?? '';
+                $array['docker_image'] = self::resolveDockerImage($attributes);
+                $array['startup'] = $attributes['startup'] ?? '';
                 $array['updated_at'] = now();
 
                 //get environment variables
-                foreach ($egg['attributes']['relationships']['variables']['data'] as $variable) {
+                // A panel that does not send the variables relation must not
+                // take the whole catalogue sync down with it.
+                $panelVariables = $attributes['relationships']['variables']['data'] ?? [];
+
+                foreach ($panelVariables as $variable) {
+                    $attributes = $variable['attributes'] ?? $variable;
+
+                    // Without an env_variable there is nothing to set, and the
+                    // rest is optional: a panel that leaves a description out
+                    // should not stop the sync.
+                    if (empty($attributes['env_variable'])) {
+                        continue;
+                    }
+
                     $environment[] = [
-                        'name' => $variable['attributes']['name'],
-                        'description' => $variable['attributes']['description'],
-                        'default_value' => $variable['attributes']['default_value'],
-                        'env_variable' => $variable['attributes']['env_variable'],
-                        'user_viewable' => $variable['attributes']['user_viewable'],
-                        'user_editable' => $variable['attributes']['user_editable'],
-                        'rules' => $variable['attributes']['rules'],
+                        'name' => $attributes['name'] ?? $attributes['env_variable'],
+                        'description' => $attributes['description'] ?? '',
+                        'default_value' => $attributes['default_value'] ?? '',
+                        'env_variable' => $attributes['env_variable'],
+                        'user_viewable' => (bool) ($attributes['user_viewable'] ?? false),
+                        'user_editable' => (bool) ($attributes['user_editable'] ?? false),
+                        'rules' => $attributes['rules'] ?? 'nullable',
                     ];
                 }
 

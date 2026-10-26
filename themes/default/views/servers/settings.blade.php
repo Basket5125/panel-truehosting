@@ -201,7 +201,7 @@
                                         </div>
                                         <div class="col-sm-8 col-md-7">
                                             <span style="max-width: 250px;" class="d-inline-block text-truncate">
-                                                {{ $serverAttributes['relationships']['location']['attributes']['short'] }}
+                                                {{ $server->location ?? $serverAttributes['relationships']['location']['attributes']['short'] ?? '—' }}
                                             </span>
                                         </div>
                                     </div>
@@ -213,7 +213,7 @@
                                         </div>
                                         <div class="col-sm-8 col-md-7">
                                             <span style="max-width: 250px;" class="d-inline-block text-truncate">
-                                                {{ $serverAttributes['relationships']['node']['attributes']['name'] }}
+                                                {{ $server->node ?? $serverAttributes['relationships']['node']['attributes']['name'] ?? '—' }}
                                             </span>
                                         </div>
                                     </div>

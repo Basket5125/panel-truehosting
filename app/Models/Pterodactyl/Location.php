@@ -38,12 +38,17 @@ class Location extends Model
 
         //map response
         $locations = array_map(function ($val) {
+            $attributes = $val['attributes'] ?? $val;
+
             return [
-                'id' => $val['attributes']['id'],
-                'name' => $val['attributes']['short'],
-                'description' => $val['attributes']['long'],
+                'id' => $attributes['id'] ?? null,
+                'name' => $attributes['short'] ?? $attributes['name'] ?? '',
+                'description' => $attributes['long'] ?? '',
             ];
         }, $locations);
+
+        // A record with no id cannot be stored against anything.
+        $locations = array_values(array_filter($locations, fn ($row) => $row['id'] !== null));
 
         //update or create
         foreach ($locations as $location) {

@@ -38,13 +38,17 @@ class Node extends Model
 
         //map response
         $nodes = array_map(function ($node) {
+            $attributes = $node['attributes'] ?? $node;
+
             return [
-                'id' => $node['attributes']['id'],
-                'location_id' => $node['attributes']['location_id'],
-                'name' => $node['attributes']['name'],
-                'description' => $node['attributes']['description'],
+                'id' => $attributes['id'] ?? null,
+                'location_id' => $attributes['location_id'] ?? null,
+                'name' => $attributes['name'] ?? '',
+                'description' => $attributes['description'] ?? '',
             ];
         }, $nodes);
+
+        $nodes = array_values(array_filter($nodes, fn ($row) => $row['id'] !== null));
 
         //update or create
         foreach ($nodes as $node) {

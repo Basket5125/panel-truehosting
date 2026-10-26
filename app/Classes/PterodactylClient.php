@@ -2,6 +2,7 @@
 
 namespace App\Classes;
 
+use App\Classes\PanelServerShape;
 use App\Contracts\GamePanelClient;
 use App\Models\Pterodactyl\Egg;
 use App\Models\Pterodactyl\Nest;
@@ -424,7 +425,10 @@ class PterodactylClient implements GamePanelClient
             }
         }
 
-        return $response->json()['attributes'];
+        // Through the shared shape: the relations are only present when the
+        // panel actually included them, and every consumer reads them as if
+        // they always are.
+        return PanelServerShape::normalise($response->json()['attributes'] ?? []);
     }
 
     /**

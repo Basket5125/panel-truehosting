@@ -38,11 +38,13 @@ class Nest extends Model
         //map response
         $nests = array_map(function ($nest) {
             return [
-                'id' => $nest['attributes']['id'],
-                'name' => $nest['attributes']['name'],
-                'description' => $nest['attributes']['description'],
+                'id' => $nest['attributes']['id'] ?? ($nest['id'] ?? null),
+                'name' => $nest['attributes']['name'] ?? ($nest['name'] ?? ''),
+                'description' => $nest['attributes']['description'] ?? ($nest['description'] ?? ''),
             ];
         }, $nests);
+
+        $nests = array_values(array_filter($nests, fn ($row) => $row['id'] !== null));
 
         foreach ($nests as $nest) {
             self::query()->updateOrCreate([
