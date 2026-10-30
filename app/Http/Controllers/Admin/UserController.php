@@ -644,12 +644,17 @@ class UserController extends Controller
     {
         $this->checkPermission(self::READ_PERMISSION);
 
-        $query = User::with('discordUser')
+        // The model_type condition belongs in the JOIN, not in a WHERE: a WHERE on a
+        // left-joined column turns the LEFT JOIN into an INNER JOIN and hides every
+        // user that has no role assigned (e.g. accounts inserted straight into the DB).
+        $query = User::with(['discordUser', 'roles'])
             ->withCount('servers')
-            ->leftJoin('model_has_roles', 'users.id', '=', 'model_has_roles.model_id')
+            ->leftJoin('model_has_roles', function ($join) {
+                $join->on('users.id', '=', 'model_has_roles.model_id')
+                    ->where('model_has_roles.model_type', '=', User::class);
+            })
             ->leftJoin('roles', 'model_has_roles.role_id', '=', 'roles.id')
-            ->selectRaw('users.*, roles.name as role_name, (SELECT COUNT(*) FROM user_referrals WHERE user_referrals.referral_id = users.id) as referrals_count')
-            ->where('model_has_roles.model_type', User::class);
+            ->selectRaw('users.*, roles.name as role_name, (SELECT COUNT(*) FROM user_referrals WHERE user_referrals.referral_id = users.id) as referrals_count');
 
         return datatables($query)
             ->addColumn('select', function (User $user) {
